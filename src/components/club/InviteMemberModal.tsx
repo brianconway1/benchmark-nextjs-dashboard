@@ -38,7 +38,7 @@ export default function InviteMemberModal({
   clubName,
 }: InviteMemberModalProps) {
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<'coach' | 'club_admin' | 'club_admin_coach' | 'view_only'>('view_only');
+  const [role, setRole] = useState<'coach' | 'club_admin' | 'club_admin_coach' | 'view_only'>('coach');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -93,7 +93,7 @@ export default function InviteMemberModal({
 
       setSuccess(true);
       setEmail('');
-      setRole('view_only');
+      setRole('coach');
 
       // Close modal after 2 seconds
       setTimeout(() => {

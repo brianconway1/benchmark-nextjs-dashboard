@@ -68,7 +68,7 @@ export default function Step2ManageMembers({
     firstName: '',
     lastName: '',
     email: '',
-    role: 'view_only',
+    role: 'coach',
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -111,7 +111,7 @@ export default function Step2ManageMembers({
       firstName: '',
       lastName: '',
       email: '',
-      role: 'view_only',
+      role: 'coach',
     });
     setError('');
   };

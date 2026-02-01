@@ -59,7 +59,7 @@ export default function Step3CreateUsers({
     firstName: '',
     lastName: '',
     email: '',
-    role: 'view_only',
+    role: 'coach',
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -97,7 +97,7 @@ export default function Step3CreateUsers({
       firstName: '',
       lastName: '',
       email: '',
-      role: 'view_only',
+      role: 'coach',
     });
     setError('');
   };
