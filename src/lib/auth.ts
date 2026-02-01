@@ -45,6 +45,13 @@ export async function loginWithPassword(email: string, password: string): Promis
   const userRole = userData.role;
   const clubId = userData.clubId;
 
+  // Check if user has an allowed role for the admin dashboard
+  const allowedRoles = ['super_admin', 'club_admin', 'club_admin_coach'];
+  if (!allowedRoles.includes(userRole)) {
+    await firebaseSignOut(auth);
+    throw new Error('Access denied. This dashboard is for club administrators only.');
+  }
+
   // Check if user should bypass subscription check (super admin)
   if (!shouldBypassSubscriptionCheck(email.toLowerCase(), userRole)) {
     // Validate subscription for club admins

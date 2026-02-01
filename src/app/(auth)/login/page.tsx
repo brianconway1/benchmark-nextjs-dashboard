@@ -10,7 +10,10 @@ import {
   Button,
   Alert,
   Paper,
+  CircularProgress,
 } from '@mui/material';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { loginWithPassword } from '@/lib/auth';
 import { useAuth } from '@/hooks/useAuth';
 import { getAuthErrorMessage } from '@/lib/errorMessages';
@@ -24,18 +27,46 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
 
   // Redirect if already logged in
   useEffect(() => {
-    if (user && userData) {
-      // Super admins go to admin dashboard, others go to onboarding
+    const handleRedirect = async () => {
+      if (!user || !userData || redirecting) return;
+
+      // Super admins go to admin dashboard
       if (userData.role === 'super_admin') {
         router.push('/admin');
+        return;
+      }
+
+      // For club admins, check if they have existing teams
+      if (userData.clubId) {
+        setRedirecting(true);
+        try {
+          const teamsQuery = query(
+            collection(db, 'teams'),
+            where('clubId', '==', userData.clubId)
+          );
+          const teamsSnapshot = await getDocs(teamsQuery);
+          const hasTeams = !teamsSnapshot.empty;
+
+          if (hasTeams) {
+            router.push('/club'); // Go to dashboard
+          } else {
+            router.push('/onboarding'); // New user needs setup
+          }
+        } catch (err) {
+          console.error('Error checking teams:', err);
+          router.push('/onboarding'); // Fallback to onboarding on error
+        }
       } else {
         router.push('/onboarding');
       }
-    }
-  }, [user, userData, router]);
+    };
+
+    handleRedirect();
+  }, [user, userData, router, redirecting]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,7 +146,14 @@ export default function LoginPage() {
               sx={{ mt: 3, mb: 2 }}
               disabled={loading}
             >
-              {loading ? 'Signing in...' : 'Sign In'}
+              {loading ? (
+                <>
+                  <CircularProgress size={20} color="inherit" sx={{ mr: 1 }} />
+                  Signing in...
+                </>
+              ) : (
+                'Sign In'
+              )}
             </Button>
             <Button
               fullWidth

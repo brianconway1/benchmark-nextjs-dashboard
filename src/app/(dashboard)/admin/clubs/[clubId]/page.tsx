@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import {
   Container,
@@ -9,12 +9,11 @@ import {
   Paper,
   Alert,
   Button,
-  Card,
-  CardContent,
   Stack,
   Tabs,
   Tab,
   LinearProgress,
+  Divider,
 } from '@mui/material';
 import { useAuth } from '@/hooks/useAuth';
 import { isSuperAdmin, canAccessClub } from '@/lib/permissions';
@@ -27,11 +26,16 @@ import {
   Groups as GroupsIcon,
   Dashboard as DashboardIcon,
   VpnKey as VpnKeyIcon,
+  Add as AddIcon,
+  PersonAdd as PersonAddIcon,
 } from '@mui/icons-material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import PageLoader from '@/components/shared/PageLoader';
+import ReferralCodesTable from '@/components/shared/ReferralCodesTable';
+import InviteMemberModal from '@/components/club/InviteMemberModal';
+import CreateTeamDialog from '@/components/teams/CreateTeamDialog';
 import { appColors } from '@/theme';
-import { formatDate, toDate } from '@/utils/dateHelpers';
+import { formatDate } from '@/utils/dateHelpers';
 
 export default function ClubDetailPage() {
   const router = useRouter();
@@ -45,31 +49,10 @@ export default function ClubDetailPage() {
   const [error, setError] = useState('');
   const [accessDenied, setAccessDenied] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
+  const [inviteMemberOpen, setInviteMemberOpen] = useState(false);
+  const [createTeamOpen, setCreateTeamOpen] = useState(false);
 
-  useEffect(() => {
-    const checkAccessAndLoad = async () => {
-      if (!user || authLoading || !clubId) return;
-
-      try {
-        const hasAccess = await isSuperAdmin(user.uid) || await canAccessClub(user.uid, clubId);
-        if (!hasAccess) {
-          setAccessDenied(true);
-          setLoading(false);
-          return;
-        }
-
-        await loadClubData();
-      } catch (err) {
-        console.error('Error:', err);
-        setError('Failed to load club data');
-        setLoading(false);
-      }
-    };
-
-    checkAccessAndLoad();
-  }, [user, authLoading, clubId]);
-
-  const loadClubData = async () => {
+  const loadClubData = useCallback(async () => {
     if (!clubId) return;
 
     try {
@@ -106,7 +89,30 @@ export default function ClubDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [clubId]);
+
+  useEffect(() => {
+    const checkAccessAndLoad = async () => {
+      if (!user || authLoading || !clubId) return;
+
+      try {
+        const hasAccess = await isSuperAdmin(user.uid) || await canAccessClub(user.uid, clubId);
+        if (!hasAccess) {
+          setAccessDenied(true);
+          setLoading(false);
+          return;
+        }
+
+        await loadClubData();
+      } catch (err) {
+        console.error('Error:', err);
+        setError('Failed to load club data');
+        setLoading(false);
+      }
+    };
+
+    checkAccessAndLoad();
+  }, [user, authLoading, clubId, loadClubData]);
 
   if (authLoading || loading) {
     return <PageLoader />;
@@ -201,6 +207,14 @@ export default function ClubDetailPage() {
   };
 
   const usagePercentage = getUsagePercentage(club.usedCount || 0, club.maxUses || 0);
+
+  const handleInviteSent = () => {
+    loadClubData(); // Refresh data after invite
+  };
+
+  const handleTeamCreated = () => {
+    loadClubData(); // Refresh data after team creation
+  };
 
   const renderOverview = () => (
     <Stack spacing={3}>
@@ -308,6 +322,24 @@ export default function ClubDetailPage() {
 
   const renderMembers = () => (
     <Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="h6" sx={{ fontWeight: 'bold', color: appColors.textPrimary }}>
+          Club Members ({members.length})
+        </Typography>
+        <Button
+          variant="contained"
+          startIcon={<PersonAddIcon />}
+          onClick={() => setInviteMemberOpen(true)}
+          sx={{
+            backgroundColor: appColors.primary,
+            color: appColors.primaryText,
+            fontWeight: 'bold',
+            '&:hover': { backgroundColor: appColors.primaryHover },
+          }}
+        >
+          Invite Member
+        </Button>
+      </Box>
       <Box sx={{ height: 600, width: '100%' }}>
         <DataGrid
           rows={members}
@@ -328,6 +360,24 @@ export default function ClubDetailPage() {
 
   const renderTeams = () => (
     <Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="h6" sx={{ fontWeight: 'bold', color: appColors.textPrimary }}>
+          Teams ({teams.length})
+        </Typography>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => setCreateTeamOpen(true)}
+          sx={{
+            backgroundColor: appColors.primary,
+            color: appColors.primaryText,
+            fontWeight: 'bold',
+            '&:hover': { backgroundColor: appColors.primaryHover },
+          }}
+        >
+          Create Team
+        </Button>
+      </Box>
       <Box sx={{ height: 600, width: '100%' }}>
         <DataGrid
           rows={teams}
@@ -347,13 +397,13 @@ export default function ClubDetailPage() {
   );
 
   const renderReferralCodes = () => {
-    // This will be implemented when we create the referral codes component
     return (
-      <Paper sx={{ p: 3 }}>
-        <Typography variant="body1" color="text.secondary">
-          Referral codes management will be implemented here.
-        </Typography>
-      </Paper>
+      <ReferralCodesTable
+        clubId={clubId}
+        clubName={club.name || 'Club'}
+        showHeader={true}
+        height={600}
+      />
     );
   };
 
@@ -383,13 +433,10 @@ export default function ClubDetailPage() {
         </Alert>
       )}
 
-      <Paper sx={{ mb: 3 }}>
-        <Tabs
+      <Tabs
           value={activeTab}
           onChange={(_, newValue) => setActiveTab(newValue)}
-            sx={{
-            borderBottom: 1,
-            borderColor: 'divider',
+          sx={{
             '& .MuiTab-root': {
               textTransform: 'none',
               fontWeight: 500,
@@ -399,15 +446,15 @@ export default function ClubDetailPage() {
             },
             '& .MuiTabs-indicator': {
               backgroundColor: appColors.primary,
-              },
-            }}
+            },
+          }}
         >
           <Tab icon={<DashboardIcon />} iconPosition="start" label="Overview" />
           <Tab icon={<PeopleIcon />} iconPosition="start" label="Members" />
           <Tab icon={<GroupsIcon />} iconPosition="start" label="Teams" />
           <Tab icon={<VpnKeyIcon />} iconPosition="start" label="Referral Codes" />
         </Tabs>
-      </Paper>
+        <Divider sx={{ mb: 3 }} />
 
       <Box sx={{ mt: 3 }}>
         {activeTab === 0 && renderOverview()}
@@ -415,6 +462,24 @@ export default function ClubDetailPage() {
         {activeTab === 2 && renderTeams()}
         {activeTab === 3 && renderReferralCodes()}
       </Box>
+
+      {/* Invite Member Modal */}
+      <InviteMemberModal
+        open={inviteMemberOpen}
+        onClose={() => setInviteMemberOpen(false)}
+        onInviteSent={handleInviteSent}
+        clubId={clubId}
+        clubName={club.name || 'Club'}
+      />
+
+      {/* Create Team Dialog */}
+      <CreateTeamDialog
+        open={createTeamOpen}
+        onClose={() => setCreateTeamOpen(false)}
+        onTeamCreated={handleTeamCreated}
+        clubId={clubId}
+        clubName={club?.name || ''}
+      />
     </Container>
   );
 }

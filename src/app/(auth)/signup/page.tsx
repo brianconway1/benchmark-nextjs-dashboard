@@ -10,6 +10,7 @@ import {
   Button,
   Alert,
   Paper,
+  CircularProgress,
 } from '@mui/material';
 import { signupAdmin } from '@/lib/auth';
 import { useAuth } from '@/hooks/useAuth';
@@ -97,8 +98,9 @@ function SignupForm() {
 
     try {
       await signupAdmin(email, password, referralCode, firstName, lastName);
-      // Redirect will happen via useEffect when user state updates
-      // The useEffect will check the role and redirect appropriately
+      // Signup successful - redirect directly instead of waiting for useEffect
+      // This avoids race condition where onAuthStateChanged fires before Firestore doc is ready
+      router.push('/onboarding');
     } catch (err: unknown) {
       setError(getAuthErrorMessage(err));
       setLoading(false);
@@ -193,7 +195,14 @@ function SignupForm() {
               sx={{ mt: 3, mb: 2 }}
               disabled={loading}
             >
-              {loading ? 'Creating Account...' : 'Create Account'}
+              {loading ? (
+                <>
+                  <CircularProgress size={20} color="inherit" sx={{ mr: 1 }} />
+                  Creating Account...
+                </>
+              ) : (
+                'Create Account'
+              )}
             </Button>
             <Button
               fullWidth
