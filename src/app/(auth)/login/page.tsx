@@ -11,10 +11,14 @@ import {
   Alert,
   Paper,
   CircularProgress,
+  Divider,
 } from '@mui/material';
+import GoogleIcon from '@mui/icons-material/Google';
+import AppleIcon from '@mui/icons-material/Apple';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { loginWithPassword } from '@/lib/auth';
+import { signInWithGoogle, signInWithApple } from '@/lib/oauthSignIn';
 import { useAuth } from '@/hooks/useAuth';
 import { getAuthErrorMessage } from '@/lib/errorMessages';
 import { getEmailValidationError } from '@/utils/validation';
@@ -27,6 +31,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState<'google' | 'apple' | null>(null);
   const [redirecting, setRedirecting] = useState(false);
 
   // Redirect if already logged in
@@ -95,6 +100,28 @@ export default function LoginPage() {
     }
   };
 
+  const handleOAuthSignIn = async (provider: 'google' | 'apple') => {
+    setError('');
+    setOauthLoading(provider);
+
+    try {
+      const signInFn = provider === 'google' ? signInWithGoogle : signInWithApple;
+      const result = await signInFn();
+
+      if (result.needsReferralCode) {
+        // New user needs to sign up with referral code
+        const emailParam = result.email ? `&email=${encodeURIComponent(result.email)}` : '';
+        router.push(`/signup?oauth=true${emailParam}`);
+        return;
+      }
+
+      // Success - redirect will happen via useEffect when user state updates
+    } catch (err: unknown) {
+      setError(getAuthErrorMessage(err));
+      setOauthLoading(null);
+    }
+  };
+
   return (
     <Container maxWidth="sm">
       <Box
@@ -144,7 +171,7 @@ export default function LoginPage() {
               fullWidth
               variant="contained"
               sx={{ mt: 3, mb: 2 }}
-              disabled={loading}
+              disabled={loading || oauthLoading !== null}
             >
               {loading ? (
                 <>
@@ -155,6 +182,43 @@ export default function LoginPage() {
                 'Sign In'
               )}
             </Button>
+
+            <Divider sx={{ my: 2 }}>or</Divider>
+
+            <Button
+              fullWidth
+              variant="outlined"
+              startIcon={oauthLoading === 'google' ? <CircularProgress size={20} /> : <GoogleIcon />}
+              onClick={() => handleOAuthSignIn('google')}
+              disabled={loading || oauthLoading !== null}
+              sx={{ mb: 1 }}
+            >
+              {oauthLoading === 'google' ? 'Signing in...' : 'Sign in with Google'}
+            </Button>
+            <Button
+              fullWidth
+              variant="outlined"
+              startIcon={oauthLoading === 'apple' ? <CircularProgress size={20} /> : <AppleIcon />}
+              onClick={() => handleOAuthSignIn('apple')}
+              disabled={loading || oauthLoading !== null}
+              sx={{ 
+                mb: 2,
+                bgcolor: 'black',
+                color: 'white',
+                borderColor: 'black',
+                '&:hover': {
+                  bgcolor: '#333',
+                  borderColor: '#333',
+                },
+                '&:disabled': {
+                  bgcolor: 'grey.300',
+                  borderColor: 'grey.300',
+                },
+              }}
+            >
+              {oauthLoading === 'apple' ? 'Signing in...' : 'Sign in with Apple'}
+            </Button>
+
             <Button
               fullWidth
               variant="text"
