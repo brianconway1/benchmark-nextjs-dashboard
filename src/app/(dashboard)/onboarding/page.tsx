@@ -14,7 +14,7 @@ const steps = ['Club Setup', 'Create Teams', 'Create Users'];
 interface OnboardingState {
   clubId: string | null;
   clubData: Partial<Club>;
-  teams: Array<Partial<Team> & { tempId?: string }>;
+  teams: Array<Partial<Team> & { tempId?: string; sportCategory?: string }>;
   users: Array<{
     teamId: string;
     firstName: string;
@@ -86,7 +86,7 @@ function OnboardingWizard() {
     handleNext();
   };
 
-  const handleStep2Complete = (teams: Array<Partial<Team> & { tempId?: string }>) => {
+  const handleStep2Complete = (teams: Array<Partial<Team> & { tempId?: string; sportCategory?: string }>) => {
     setState((prev) => ({
       ...prev,
       teams,
