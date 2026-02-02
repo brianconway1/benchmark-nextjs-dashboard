@@ -31,19 +31,46 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 
 ## Environment Variables
 
-This application requires Firebase configuration environment variables. Create a `.env.local` file in the root directory with the following variables:
+This application uses Firebase configuration via environment variables. There are two Firebase projects:
+
+- **Production** (`benchmarkcoach-prod`) — used by the production Vercel deployment
+- **Staging** (original Firebase project) — used for local development and the staging branch
+
+### Environment Files
+
+| File | Purpose | Committed to git? |
+|------|---------|-------------------|
+| `.env.production` | Production Firebase config values | Yes |
+| `.env.staging` | Staging Firebase config values | Yes |
+| `.env.example` | Template with empty values | Yes |
+| `.env.local` | Your local overrides (create this) | No |
+
+### Local Development (Staging)
+
+Copy the staging config to `.env.local`:
 
 ```bash
-NEXT_PUBLIC_FIREBASE_API_KEY=your-api-key
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.firebasestorage.app
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your-sender-id
-NEXT_PUBLIC_FIREBASE_APP_ID=your-app-id
-NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=your-measurement-id
+cp .env.staging .env.local
 ```
 
-See `.env.example` for a template (if available).
+### Vercel Deployment
+
+Environment variables are configured per-environment in the Vercel dashboard:
+
+- **Production** (main branch): Set the `NEXT_PUBLIC_FIREBASE_*` variables to the values in `.env.production`
+- **Preview** (staging branch): Set the `NEXT_PUBLIC_FIREBASE_*` variables to the values in `.env.staging`
+
+### Required Variables
+
+```
+NEXT_PUBLIC_FIREBASE_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+NEXT_PUBLIC_FIREBASE_PROJECT_ID
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+NEXT_PUBLIC_FIREBASE_APP_ID
+NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+```
 
 ## Deploy on Vercel
 
@@ -62,8 +89,9 @@ See `.env.example` for a template (if available).
 
 2. **Configure Environment Variables:**
    - In the project settings, go to "Environment Variables"
-   - Add all the `NEXT_PUBLIC_FIREBASE_*` variables from your `.env.local` file
-   - Make sure to add them for all environments (Production, Preview, Development)
+   - For **Production** environment: add values from `.env.production` (benchmarkcoach-prod)
+   - For **Preview** environment: add values from `.env.staging` (staging Firebase project)
+   - This ensures the main branch deploys against production and preview/staging branches deploy against staging
 
 3. **Configure Build Settings:**
    - Framework Preset: Next.js (auto-detected)
