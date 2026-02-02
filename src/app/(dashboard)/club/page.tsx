@@ -100,31 +100,28 @@ export default function ClubDashboardPage() {
   // Calculate stats
   const totalMembers = members.length;
   const activeTeams = teams.filter((team) => !team.deletedAt).length;
-  const activeSubscriptions = subscriptions.filter((sub) => 
+  const activeSubscriptions = subscriptions.filter((sub) =>
     sub.status === 'active' || sub.status === 'trialing'
   ).length;
-  
+
   // Get limits from club document (aggregated from subscriptions)
   const maxCoachAccounts = club?.maxCoachAccounts || null;
   const maxViewOnlyUsers = club?.maxViewOnlyUsers || null;
-  
+
   // Calculate coach accounts used (coach OR club_admin_coach roles)
-  const coachMembers = members.filter((m) => 
+  const coachMembers = members.filter((m) =>
     m.role === 'coach' || m.role === 'club_admin_coach'
   ).length;
-  const coachAccountsUsed = maxCoachAccounts !== null 
-    ? `${coachMembers} / ${maxCoachAccounts}` 
+  const coachAccountsUsed = maxCoachAccounts !== null
+    ? `${coachMembers} / ${maxCoachAccounts}`
     : coachMembers.toString();
-  
+
   // Calculate member slots used (view_only users)
   const viewOnlyMembers = members.filter((m) => m.role === 'view_only').length;
-  const memberSlotsUsed = maxViewOnlyUsers !== null 
-    ? `${viewOnlyMembers} / ${maxViewOnlyUsers}` 
+  const memberSlotsUsed = maxViewOnlyUsers !== null
+    ? `${viewOnlyMembers} / ${maxViewOnlyUsers}`
     : viewOnlyMembers.toString();
-  
-  // Check if approaching limits (> 80% usage)
-  const coachWarning = maxCoachAccounts !== null && coachMembers / maxCoachAccounts > 0.8;
-  const viewOnlyWarning = maxViewOnlyUsers !== null && viewOnlyMembers / maxViewOnlyUsers > 0.8;
+
 
   if (loading) {
     return (
@@ -196,10 +193,10 @@ export default function ClubDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card sx={{ height: '100%', border: coachWarning ? '2px solid #ff9800' : 'none' }}>
+        <Card sx={{ height: '100%' }}>
           <CardContent>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-              <PersonAddIcon sx={{ fontSize: 40, color: coachWarning ? '#ff9800' : appColors.primary, mr: 2 }} />
+              <PersonAddIcon sx={{ fontSize: 40, color: appColors.primary, mr: 2 }} />
               <Box>
                 <Typography variant="h4" sx={{ fontWeight: 'bold', color: appColors.textPrimary }}>
                   {coachAccountsUsed}
@@ -207,20 +204,15 @@ export default function ClubDashboardPage() {
                 <Typography variant="body2" color="text.secondary">
                   Coach Accounts Used
                 </Typography>
-                {coachWarning && (
-                  <Typography variant="caption" sx={{ color: '#ff9800', mt: 0.5, display: 'block' }}>
-                    Approaching limit
-                  </Typography>
-                )}
               </Box>
             </Box>
           </CardContent>
         </Card>
 
-        <Card sx={{ height: '100%', border: viewOnlyWarning ? '2px solid #ff9800' : 'none' }}>
+        <Card sx={{ height: '100%' }}>
           <CardContent>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-              <PersonAddIcon sx={{ fontSize: 40, color: viewOnlyWarning ? '#ff9800' : appColors.primary, mr: 2 }} />
+              <PersonAddIcon sx={{ fontSize: 40, color: appColors.primary, mr: 2 }} />
               <Box>
                 <Typography variant="h4" sx={{ fontWeight: 'bold', color: appColors.textPrimary }}>
                   {memberSlotsUsed}
@@ -228,11 +220,6 @@ export default function ClubDashboardPage() {
                 <Typography variant="body2" color="text.secondary">
                   View Only Slots Used
                 </Typography>
-                {viewOnlyWarning && (
-                  <Typography variant="caption" sx={{ color: '#ff9800', mt: 0.5, display: 'block' }}>
-                    Approaching limit
-                  </Typography>
-                )}
               </Box>
             </Box>
           </CardContent>

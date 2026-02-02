@@ -19,6 +19,7 @@ import {
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { getEmailValidationError } from '@/utils/validation';
+import { validateUserLimit } from '@/lib/subscriptionValidation';
 import { useToast } from '@/contexts/ToastContext';
 import { appColors } from '@/theme';
 
@@ -70,6 +71,14 @@ export default function GenerateReferralCodeDialog({
     try {
       setIsSubmitting(true);
 
+      // Validate subscription limits before creating referral code
+      const validation = await validateUserLimit(clubId, role, 1);
+      if (!validation.valid) {
+        setError(validation.reason || 'Cannot generate code: subscription limit exceeded');
+        setIsSubmitting(false);
+        return;
+      }
+
       const code = generateReferralCode();
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
@@ -80,6 +89,7 @@ export default function GenerateReferralCodeDialog({
         clubName,
         intendedRole: role,
         adminEmail: email.trim().toLowerCase(),
+        isMemberInvitation: true, // Flag to trigger invitation email
         maxUses: 1,
         usesCount: 0,
         active: true,

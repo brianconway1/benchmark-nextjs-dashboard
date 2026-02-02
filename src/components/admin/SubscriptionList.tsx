@@ -1,21 +1,57 @@
 'use client';
 
-import { useMemo } from 'react';
-import { DataGrid, GridColDef } from '@mui/x-data-grid';
+import { useState } from 'react';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  IconButton,
+  Collapse,
+  Box,
+  Typography,
+  Chip,
+  CircularProgress,
+  TablePagination,
+} from '@mui/material';
+import {
+  KeyboardArrowDown as ExpandIcon,
+  KeyboardArrowUp as CollapseIcon,
+  People as PeopleIcon,
+  Visibility as VisibilityIcon,
+} from '@mui/icons-material';
 import { formatDate } from '@/utils/dateHelpers';
+import { appColors } from '@/theme';
 
 import type { Timestamp } from 'firebase/firestore';
 
 interface Subscription {
   id: string;
   clubId?: string;
+  clubName?: string;
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
   subscriptionType?: string;
   productName?: string;
   planName?: string;
+  // Coach Account fields
   maxCoachAccounts?: number;
+  coachAccountPlanName?: string;
+  coachAccountPriceId?: string;
+  coachAccountProductId?: string;
+  coachAccountPrice?: number;
+  coachAccountItemId?: string;
+  // View Only fields
   maxViewOnlyUsers?: number;
+  viewOnlyPlanName?: string;
+  viewOnlyPriceId?: string;
+  viewOnlyProductId?: string;
+  viewOnlyPrice?: number;
+  viewOnlyItemId?: string;
+  // Status and billing
   status?: string;
   planType?: string;
   price?: number;
@@ -36,154 +72,292 @@ interface SubscriptionListProps {
   showClubName?: boolean;
 }
 
-export default function SubscriptionList({ 
-  subscriptions, 
-  loading = false,
-  showClubName = false 
-}: SubscriptionListProps) {
-  const columns: GridColDef[] = useMemo(() => {
-    const baseColumns: GridColDef[] = [
-      {
-        field: 'planName',
-        headerName: 'Plan',
-        flex: 1,
-        minWidth: 150,
-        valueGetter: (value, row: Subscription) => {
-          return value || row.productName || 'N/A';
-        },
-      },
-      {
-        field: 'subscriptionType',
-        headerName: 'Type',
-        width: 130,
-        valueGetter: (value: unknown) => {
-          if (!value) return 'N/A';
-          const typeMap: Record<string, string> = {
-            coach_account: 'Coach Account',
-            view_only: 'View Only',
-            unknown: 'Unknown',
-          };
-          return typeMap[value as string] || value;
-        },
-      },
-      {
-        field: 'status',
-        headerName: 'Status',
-        width: 120,
-        valueGetter: (value: unknown) => {
-          if (!value) return 'N/A';
-          const statusMap: Record<string, string> = {
-            trialing: 'Trialing',
-            active: 'Active',
-            canceled: 'Canceled',
-            past_due: 'Past Due',
-            unpaid: 'Unpaid',
-            incomplete: 'Incomplete',
-            incomplete_expired: 'Expired',
-          };
-          return statusMap[value as string] || value;
-        },
-      },
-      {
-        field: 'price',
-        headerName: 'Price',
-        width: 120,
-        valueGetter: (value: unknown) => {
-          if (!value && value !== 0) return 'N/A';
-          return new Intl.NumberFormat('en-GB', {
-            style: 'currency',
-            currency: 'GBP',
-          }).format(value as number);
-        },
-      },
-      {
-        field: 'planType',
-        headerName: 'Billing',
-        width: 100,
-        valueGetter: (value: unknown) => {
-          if (!value) return 'N/A';
-          return (value as string).charAt(0).toUpperCase() + (value as string).slice(1);
-        },
-      },
-      {
-        field: 'maxCoachAccounts',
-        headerName: 'Max Coaches',
-        width: 130,
-        valueGetter: (value: unknown) => {
-          if (!value && value !== 0) return 'N/A';
-          return (value as number).toString();
-        },
-      },
-      {
-        field: 'maxViewOnlyUsers',
-        headerName: 'Max View Only',
-        width: 130,
-        valueGetter: (value: unknown) => {
-          if (!value && value !== 0) return 'N/A';
-          return (value as number).toString();
-        },
-      },
-      {
-        field: 'trialEndDate',
-        headerName: 'Trial Ends',
-        width: 150,
-        valueGetter: (value: unknown) => formatDate(value),
-      },
-      {
-        field: 'currentPeriodEnd',
-        headerName: 'Next Billing',
-        width: 150,
-        valueGetter: (value: unknown) => formatDate(value),
-      },
-      {
-        field: 'cancelAtPeriodEnd',
-        headerName: 'Cancels',
-        width: 100,
-        valueGetter: (value: unknown) => {
-          return value ? 'Yes' : 'No';
-        },
-      },
-      {
-        field: 'stripeSubscriptionId',
-        headerName: 'Stripe ID',
-        width: 200,
-        valueGetter: (value: unknown) => (value as string) || 'N/A',
-      },
-    ];
+// Helper functions
+function formatCurrency(amount: number | undefined | null): string {
+  if (amount === undefined || amount === null) return 'N/A';
+  return new Intl.NumberFormat('en-GB', {
+    style: 'currency',
+    currency: 'GBP',
+  }).format(amount);
+}
 
-    // Add club name column if showClubName is true
-    if (showClubName) {
-      baseColumns.unshift({
-        field: 'clubName',
-        headerName: 'Club',
-        flex: 1,
-        minWidth: 200,
-        valueGetter: (value: unknown) => (value as string) || 'N/A',
-      });
-    }
+function getStatusColor(status: string | undefined): 'success' | 'warning' | 'error' | 'default' {
+  switch (status) {
+    case 'active':
+    case 'trialing':
+      return 'success';
+    case 'past_due':
+      return 'warning';
+    case 'canceled':
+    case 'unpaid':
+      return 'error';
+    default:
+      return 'default';
+  }
+}
 
-    return baseColumns;
-  }, [showClubName]);
+function getStatusLabel(status: string | undefined): string {
+  const statusMap: Record<string, string> = {
+    trialing: 'Trialing',
+    active: 'Active',
+    canceled: 'Canceled',
+    past_due: 'Past Due',
+    unpaid: 'Unpaid',
+    incomplete: 'Incomplete',
+  };
+  return statusMap[status || ''] || status || 'Unknown';
+}
+
+// Expandable Row Component
+function SubscriptionRow({
+  subscription,
+  showClubName
+}: {
+  subscription: Subscription;
+  showClubName: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const hasCoachAccount = subscription.maxCoachAccounts !== undefined && subscription.maxCoachAccounts !== null;
+  const hasViewOnly = subscription.maxViewOnlyUsers !== undefined && subscription.maxViewOnlyUsers !== null;
+  const hasBothProducts = hasCoachAccount && hasViewOnly;
+
+  const coachAccountPlanName = subscription.coachAccountPlanName || subscription.planName || 'Coach Account';
+  const viewOnlyPlanName = subscription.viewOnlyPlanName || `${subscription.maxViewOnlyUsers} View Only Users`;
 
   return (
-    <div style={{ height: 600, width: '100%' }}>
-      <DataGrid
-        rows={subscriptions}
-        columns={columns}
-        loading={loading}
-        getRowId={(row) => row.id}
-        disableRowSelectionOnClick
-            sx={{
-              // DataGrid styling is now handled globally in theme
-            }}
-        initialState={{
-          pagination: {
-            paginationModel: { pageSize: 25 },
-          },
+    <>
+      <TableRow
+        sx={{
+          '& > *': { borderBottom: 'unset' },
+          '&:hover': { bgcolor: 'grey.50' },
+          cursor: hasBothProducts ? 'pointer' : 'default',
         }}
-        pageSizeOptions={[10, 25, 50, 100]}
-      />
-    </div>
+        onClick={() => hasBothProducts && setOpen(!open)}
+      >
+        <TableCell sx={{ width: 50 }}>
+          {hasBothProducts && (
+            <IconButton
+              aria-label="expand row"
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpen(!open);
+              }}
+            >
+              {open ? <CollapseIcon /> : <ExpandIcon />}
+            </IconButton>
+          )}
+        </TableCell>
+        {showClubName && (
+          <TableCell>
+            <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+              {subscription.clubName || 'N/A'}
+            </Typography>
+          </TableCell>
+        )}
+        <TableCell>
+          <Box>
+            <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+              {subscription.planName || subscription.productName || 'N/A'}
+            </Typography>
+            {hasBothProducts && (
+              <Typography variant="caption" color="text.secondary">
+                Bundle: Coach + View Only
+              </Typography>
+            )}
+          </Box>
+        </TableCell>
+        <TableCell>
+          <Chip
+            label={getStatusLabel(subscription.status)}
+            color={getStatusColor(subscription.status)}
+            size="small"
+          />
+        </TableCell>
+        <TableCell>
+          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+            {formatCurrency(subscription.price)}/yr
+          </Typography>
+        </TableCell>
+        <TableCell>
+          {hasCoachAccount ? subscription.maxCoachAccounts : 'N/A'}
+        </TableCell>
+        <TableCell>
+          {hasViewOnly ? subscription.maxViewOnlyUsers : 'N/A'}
+        </TableCell>
+        <TableCell>
+          {formatDate(subscription.currentPeriodEnd)}
+        </TableCell>
+        <TableCell>
+          {subscription.cancelAtPeriodEnd ? (
+            <Chip label="Yes" color="warning" size="small" />
+          ) : (
+            <Typography variant="body2" color="text.secondary">No</Typography>
+          )}
+        </TableCell>
+      </TableRow>
+
+      {/* Expandable Detail Row */}
+      {hasBothProducts && (
+        <TableRow>
+          <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={showClubName ? 10 : 9}>
+            <Collapse in={open} timeout="auto" unmountOnExit>
+              <Box sx={{ py: 2, px: 3, bgcolor: 'grey.50' }}>
+                <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: appColors.textPrimary }}>
+                  Subscription Line Items
+                </Typography>
+
+                <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                  {/* Coach Account Item */}
+                  <Box
+                    sx={{
+                      flex: '1 1 300px',
+                      bgcolor: 'white',
+                      p: 2,
+                      borderRadius: 1,
+                      border: '1px solid #e0e0e0',
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <PeopleIcon fontSize="small" sx={{ color: appColors.primary }} />
+                        <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                          Coach Account
+                        </Typography>
+                      </Box>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: appColors.primary }}>
+                        {formatCurrency(subscription.coachAccountPrice)}/yr
+                      </Typography>
+                    </Box>
+                    <Typography variant="body2" color="text.secondary">
+                      {coachAccountPlanName}
+                    </Typography>
+                    <Typography variant="body2">
+                      Up to <strong>{subscription.maxCoachAccounts}</strong> coach{subscription.maxCoachAccounts !== 1 ? 'es' : ''}
+                    </Typography>
+                  </Box>
+
+                  {/* View Only Item */}
+                  <Box
+                    sx={{
+                      flex: '1 1 300px',
+                      bgcolor: 'white',
+                      p: 2,
+                      borderRadius: 1,
+                      border: '1px solid #e0e0e0',
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <VisibilityIcon fontSize="small" sx={{ color: appColors.primary }} />
+                        <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                          View Only Pack
+                        </Typography>
+                      </Box>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: appColors.primary }}>
+                        {formatCurrency(subscription.viewOnlyPrice)}/yr
+                      </Typography>
+                    </Box>
+                    <Typography variant="body2" color="text.secondary">
+                      {viewOnlyPlanName}
+                    </Typography>
+                    <Typography variant="body2">
+                      Up to <strong>{subscription.maxViewOnlyUsers}</strong> user{subscription.maxViewOnlyUsers !== 1 ? 's' : ''}
+                    </Typography>
+                  </Box>
+                </Box>
+
+                <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid #e0e0e0' }}>
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Stripe ID:</strong> {subscription.stripeSubscriptionId}
+                  </Typography>
+                </Box>
+              </Box>
+            </Collapse>
+          </TableCell>
+        </TableRow>
+      )}
+    </>
   );
 }
 
+export default function SubscriptionList({
+  subscriptions,
+  loading = false,
+  showClubName = false
+}: SubscriptionListProps) {
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
+
+  const handleChangePage = (_event: unknown, newPage: number) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
+  const paginatedSubscriptions = subscriptions.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage
+  );
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  return (
+    <Paper sx={{ width: '100%', overflow: 'hidden' }}>
+      <TableContainer sx={{ maxHeight: 600 }}>
+        <Table stickyHeader size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell sx={{ width: 50 }} /> {/* Expand button column */}
+              {showClubName && <TableCell sx={{ fontWeight: 'bold' }}>Club</TableCell>}
+              <TableCell sx={{ fontWeight: 'bold' }}>Plan</TableCell>
+              <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
+              <TableCell sx={{ fontWeight: 'bold' }}>Total Price</TableCell>
+              <TableCell sx={{ fontWeight: 'bold' }}>Max Coaches</TableCell>
+              <TableCell sx={{ fontWeight: 'bold' }}>Max View Only</TableCell>
+              <TableCell sx={{ fontWeight: 'bold' }}>Next Billing</TableCell>
+              <TableCell sx={{ fontWeight: 'bold' }}>Cancels</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {paginatedSubscriptions.map((subscription) => (
+              <SubscriptionRow
+                key={subscription.id}
+                subscription={subscription}
+                showClubName={showClubName}
+              />
+            ))}
+            {paginatedSubscriptions.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={showClubName ? 10 : 9} align="center">
+                  <Typography variant="body2" color="text.secondary" sx={{ py: 4 }}>
+                    No subscriptions found
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
+      <TablePagination
+        rowsPerPageOptions={[10, 25, 50, 100]}
+        component="div"
+        count={subscriptions.length}
+        rowsPerPage={rowsPerPage}
+        page={page}
+        onPageChange={handleChangePage}
+        onRowsPerPageChange={handleChangeRowsPerPage}
+      />
+    </Paper>
+  );
+}

@@ -305,8 +305,8 @@ export default function ClubDetailPage() {
                       usagePercentage >= 90
                         ? appColors.error
                         : usagePercentage >= 70
-                        ? appColors.warning
-                        : appColors.success,
+                          ? appColors.warning
+                          : appColors.success,
                   },
                 }}
               />
@@ -402,6 +402,7 @@ export default function ClubDetailPage() {
         clubId={clubId}
         clubName={club.name || 'Club'}
         showHeader={true}
+        titleVariant="section"
         height={600}
       />
     );
@@ -434,27 +435,27 @@ export default function ClubDetailPage() {
       )}
 
       <Tabs
-          value={activeTab}
-          onChange={(_, newValue) => setActiveTab(newValue)}
-          sx={{
-            '& .MuiTab-root': {
-              textTransform: 'none',
-              fontWeight: 500,
-            },
-            '& .Mui-selected': {
-              color: appColors.primary,
-            },
-            '& .MuiTabs-indicator': {
-              backgroundColor: appColors.primary,
-            },
-          }}
-        >
-          <Tab icon={<DashboardIcon />} iconPosition="start" label="Overview" />
-          <Tab icon={<PeopleIcon />} iconPosition="start" label="Members" />
-          <Tab icon={<GroupsIcon />} iconPosition="start" label="Teams" />
-          <Tab icon={<VpnKeyIcon />} iconPosition="start" label="Referral Codes" />
-        </Tabs>
-        <Divider sx={{ mb: 3 }} />
+        value={activeTab}
+        onChange={(_, newValue) => setActiveTab(newValue)}
+        sx={{
+          '& .MuiTab-root': {
+            textTransform: 'none',
+            fontWeight: 500,
+          },
+          '& .Mui-selected': {
+            color: appColors.primary,
+          },
+          '& .MuiTabs-indicator': {
+            backgroundColor: appColors.primary,
+          },
+        }}
+      >
+        <Tab icon={<DashboardIcon />} iconPosition="start" label="Overview" />
+        <Tab icon={<PeopleIcon />} iconPosition="start" label="Members" />
+        <Tab icon={<GroupsIcon />} iconPosition="start" label="Teams" />
+        <Tab icon={<VpnKeyIcon />} iconPosition="start" label="Referral Codes" />
+      </Tabs>
+      <Divider sx={{ mb: 3 }} />
 
       <Box sx={{ mt: 3 }}>
         {activeTab === 0 && renderOverview()}

@@ -5,16 +5,13 @@ import {
   Container,
   Box,
   Typography,
-  Button,
   CircularProgress,
 } from '@mui/material';
-import { Add as AddIcon } from '@mui/icons-material';
 import { useAuth } from '@/hooks/useAuth';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Club } from '@/types';
 import ReferralCodesTable from '@/components/shared/ReferralCodesTable';
-import { appColors } from '@/theme';
 
 export default function ReferralCodesPage() {
   const { userData, loading: authLoading } = useAuth();
@@ -66,15 +63,6 @@ export default function ReferralCodesPage() {
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" component="h1" gutterBottom sx={{ fontWeight: 'bold', color: appColors.textPrimary }}>
-          Referral Codes
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Manage referral codes for inviting members to your club
-        </Typography>
-      </Box>
-
       <ReferralCodesTable
         clubId={userData.clubId}
         clubName={club.name || 'Club'}

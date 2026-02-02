@@ -20,6 +20,7 @@ import {
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { getEmailValidationError } from '@/utils/validation';
+import { validateUserLimit } from '@/lib/subscriptionValidation';
 import { appColors } from '@/theme';
 
 interface InviteMemberModalProps {
@@ -70,6 +71,14 @@ export default function InviteMemberModal({
 
     try {
       setIsSubmitting(true);
+
+      // Validate subscription limits before creating referral code
+      const validation = await validateUserLimit(clubId, role, 1);
+      if (!validation.valid) {
+        setError(validation.reason || 'Cannot invite member: subscription limit exceeded');
+        setIsSubmitting(false);
+        return;
+      }
 
       const referralCode = generateReferralCode();
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days

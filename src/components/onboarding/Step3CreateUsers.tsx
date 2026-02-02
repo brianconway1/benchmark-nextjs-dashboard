@@ -28,6 +28,7 @@ import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { collection, doc, setDoc, updateDoc, getDoc, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { isValidEmail } from '@/utils/validation';
+import { validateUserLimit } from '@/lib/subscriptionValidation';
 import { appColors } from '@/theme';
 
 interface UserToCreate {
@@ -121,9 +122,32 @@ export default function Step3CreateUsers({
     setError('');
 
     try {
+      // Validate subscription limits before creating users
+      // Group users by role to check limits efficiently
+      const coachUsers = users.filter(u => u.role === 'coach' || u.role === 'club_admin_coach');
+      const viewOnlyUsers = users.filter(u => u.role === 'view_only');
+
+      if (coachUsers.length > 0) {
+        const validation = await validateUserLimit(clubId, 'coach', coachUsers.length);
+        if (!validation.valid) {
+          setError(validation.reason || 'Cannot add coaches: subscription limit exceeded');
+          setLoading(false);
+          return;
+        }
+      }
+
+      if (viewOnlyUsers.length > 0) {
+        const validation = await validateUserLimit(clubId, 'view_only', viewOnlyUsers.length);
+        if (!validation.valid) {
+          setError(validation.reason || 'Cannot add view-only users: subscription limit exceeded');
+          setLoading(false);
+          return;
+        }
+      }
+
       // Create teams first (if they have tempIds)
       const teamIdMap: Record<string, string> = {};
-      
+
       for (const team of teams) {
         if (team.tempId) {
           const teamRef = doc(collection(db, 'teams'));
@@ -145,15 +169,15 @@ export default function Step3CreateUsers({
 
       // Create users and referral codes, track user IDs by team
       const teamMembersMap: Record<string, Array<{ userId: string; name: string; email: string; role: string }>> = {};
-      
+
       for (const user of users) {
         const actualTeamId = teamIdMap[user.teamId] || user.teamId;
-        
+
         // Initialize team members array if needed
         if (!teamMembersMap[actualTeamId]) {
           teamMembersMap[actualTeamId] = [];
         }
-        
+
         // Generate referral code
         const generateReferralCode = () => {
           const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -201,7 +225,7 @@ export default function Step3CreateUsers({
             updatedAt: serverTimestamp(),
           });
         });
-        
+
         // Track user for team members array
         teamMembersMap[actualTeamId].push({
           userId: userId,
@@ -216,11 +240,11 @@ export default function Step3CreateUsers({
         if (members.length > 0) {
           const teamRef = doc(db, 'teams', teamId);
           const teamDoc = await getDoc(teamRef);
-          
+
           if (teamDoc.exists()) {
             const teamData = teamDoc.data();
             const existingMembers = teamData.members || [];
-            
+
             // Merge with existing members (avoid duplicates)
             const allMembers = [...existingMembers];
             members.forEach(newMember => {
@@ -228,7 +252,7 @@ export default function Step3CreateUsers({
                 allMembers.push(newMember);
               }
             });
-            
+
             // Update team with members array and memberCount
             await updateDoc(teamRef, {
               members: allMembers,

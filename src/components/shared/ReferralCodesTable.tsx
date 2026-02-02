@@ -26,6 +26,8 @@ interface ReferralCodesTableProps {
   clubName: string;
   /** Whether to show the header with title and generate button. Default true. */
   showHeader?: boolean;
+  /** Title variant - 'page' for standalone pages (h4), 'section' for embedded sections (h6). Default 'page'. */
+  titleVariant?: 'page' | 'section';
   /** Custom height for the DataGrid. Default 600. */
   height?: number;
 }
@@ -34,6 +36,7 @@ export default function ReferralCodesTable({
   clubId,
   clubName,
   showHeader = true,
+  titleVariant = 'page',
   height = 600,
 }: ReferralCodesTableProps) {
   const { showSuccess, showError } = useToast();
@@ -289,12 +292,17 @@ export default function ReferralCodesTable({
   return (
     <Box>
       {showHeader && (
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: titleVariant === 'page' ? 4 : 3 }}>
           <Box>
-            <Typography variant="h6" sx={{ fontWeight: 'bold', color: appColors.textPrimary }}>
+            <Typography
+              variant={titleVariant === 'page' ? 'h4' : 'h6'}
+              component={titleVariant === 'page' ? 'h1' : 'h2'}
+              gutterBottom
+              sx={{ fontWeight: 'bold', color: appColors.textPrimary }}
+            >
               Referral Codes
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant={titleVariant === 'page' ? 'body1' : 'body2'} color="text.secondary">
               Manage referral codes for inviting members to this club
             </Typography>
           </Box>
@@ -370,7 +378,7 @@ export default function ReferralCodesTable({
         title="Delete Referral Code"
         message={
           <Typography>
-            Are you sure you want to delete referral code <strong>&quot;{codeToDelete?.code}&quot;</strong>? 
+            Are you sure you want to delete referral code <strong>&quot;{codeToDelete?.code}&quot;</strong>?
             This action cannot be undone.
           </Typography>
         }
