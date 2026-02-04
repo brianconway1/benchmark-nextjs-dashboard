@@ -21,11 +21,10 @@ import {
   setDoc,
   runTransaction,
   serverTimestamp,
-  arrayUnion,
-  increment,
   limit,
 } from 'firebase/firestore';
-import { auth, db } from './firebase';
+import { httpsCallable } from 'firebase/functions';
+import { auth, db, functions } from './firebase';
 import { validateSubscriptionForLogin, shouldBypassSubscriptionCheck } from './subscriptionValidation';
 
 // Store pending OAuth credentials when referral code is needed
@@ -256,15 +255,14 @@ async function linkOAuthToUser(
 
 /**
  * Complete OAuth signup with referral code
+ * Uses Cloud Function to handle Firestore writes (bypasses security rules)
  */
 async function completeOAuthSignup(
   credential: AuthCredential,
   email: string,
   referralCode: string
 ): Promise<OAuthResult> {
-  const emailLower = email.toLowerCase().trim();
-
-  // Validate referral code
+  // Validate referral code (read-only, allowed by rules)
   const referralRef = doc(db, 'referral_codes', referralCode);
   const referralSnap = await getDoc(referralRef);
 
@@ -277,65 +275,43 @@ async function completeOAuthSignup(
     throw new Error('This referral code is inactive. Please contact your club administrator.');
   }
 
+  // Check if code has been used up
+  const maxUses = typeof referralData.maxUses === 'number' ? referralData.maxUses : 100;
+  const currentUses = typeof referralData.usesCount === 'number' ? referralData.usesCount : 0;
+  if (currentUses >= maxUses) {
+    throw new Error('This referral code has reached its maximum uses.');
+  }
+
   // Create Firebase Auth account with OAuth credential
   const userCredential = await signInWithCredential(auth, credential);
-  const uid = userCredential.user.uid;
 
-  // Create Firestore user document
-  await runTransaction(db, async (tx) => {
-    const refSnap = await tx.get(referralRef);
-    if (!refSnap.exists()) throw new Error('Referral code no longer exists.');
+  // Extract name from OAuth profile
+  const displayName = userCredential.user.displayName || '';
+  const firstName = displayName.split(' ')[0] || '';
+  const lastName = displayName.split(' ').slice(1).join(' ') || '';
 
-    const refData = refSnap.data();
-    const maxUses = typeof refData.maxUses === 'number' ? refData.maxUses : 100;
-    const currentUses = typeof refData.usesCount === 'number' ? refData.usesCount : 0;
-
-    if (refData.active === false) {
-      throw new Error('Referral code is inactive.');
-    }
-    if (currentUses >= maxUses) {
-      throw new Error('This referral code has reached its maximum uses.');
-    }
-
-    // Update referral usage
-    tx.update(referralRef, {
-      usesCount: currentUses + 1,
-      updated_at: serverTimestamp(),
+  // Call Cloud Function to complete signup (creates user doc, updates referral code, etc.)
+  try {
+    const completeUserSignup = httpsCallable(functions, 'completeUserSignup');
+    await completeUserSignup({
+      referralCode,
+      firstName,
+      lastName,
+      hasPassword: false,
+      authProviders: [credential.providerId],
     });
-
-    // Create user document
-    const userRef = doc(db, 'users', uid);
-    const userRole = refData.intendedRole || 'club_admin';
-
-    tx.set(
-      userRef,
-      {
-        email: emailLower,
-        displayName: userCredential.user.displayName || '',
-        firstName: userCredential.user.displayName?.split(' ')[0] || '',
-        lastName: userCredential.user.displayName?.split(' ').slice(1).join(' ') || '',
-        clubId: refData.club_id || refData.clubId || null,
-        role: userRole,
-        referralCode: referralCode,
-        hasPassword: false,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        authProviders: [credential.providerId],
-      },
-      { merge: true }
-    );
-
-    // If club admin, add to club
-    if (refData.clubId && (userRole === 'club_admin' || userRole === 'club_admin_coach')) {
-      const clubRef = doc(db, 'sports_clubs', refData.clubId);
-      tx.update(clubRef, {
-        clubAdminIds: arrayUnion(uid),
-        usedCount: increment(1),
-        status: 'active',
-        updatedAt: serverTimestamp(),
-      });
+  } catch (error: unknown) {
+    // If Cloud Function fails, sign out and delete the auth account
+    try {
+      await userCredential.user.delete();
+    } catch (deleteError) {
+      console.error('Failed to cleanup auth account after signup error:', deleteError);
     }
-  });
+    await auth.signOut();
+
+    const err = error as { message?: string };
+    throw new Error(err.message || 'Failed to complete signup. Please try again.');
+  }
 
   return { user: userCredential.user, isNewAccount: true, needsReferralCode: false };
 }

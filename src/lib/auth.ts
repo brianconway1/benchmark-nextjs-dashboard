@@ -10,18 +10,11 @@ import {
   User as FirebaseUser,
 } from 'firebase/auth';
 import {
-  collection,
-  query,
-  where,
-  getDocs,
   doc,
   getDoc,
-  runTransaction,
-  serverTimestamp,
-  arrayUnion,
-  increment,
 } from 'firebase/firestore';
-import { auth, db } from './firebase';
+import { httpsCallable } from 'firebase/functions';
+import { auth, db, functions } from './firebase';
 import type { User } from '@/types';
 import { validateSubscriptionForLogin, shouldBypassSubscriptionCheck } from './subscriptionValidation';
 
@@ -70,6 +63,9 @@ export async function loginWithPassword(email: string, password: string): Promis
 /**
  * Signup for Admin (creates password - works for both club admin and super admin)
  * Role is determined by the referral code's intendedRole field
+ *
+ * Uses the completeUserSignup Cloud Function to handle Firestore writes
+ * (bypasses security rules with Admin SDK for atomic operations)
  */
 export async function signupAdmin(
   email: string,
@@ -78,7 +74,7 @@ export async function signupAdmin(
   firstName: string,
   lastName: string
 ): Promise<FirebaseUser> {
-  // 1. Validate referral code exists and is active
+  // 1. Validate referral code exists and is active (read-only, allowed by rules)
   const refDoc = await getDoc(doc(db, 'referral_codes', referralCode));
   if (!refDoc.exists()) {
     throw new Error('Invalid referral code');
@@ -87,6 +83,11 @@ export async function signupAdmin(
   const refData = refDoc.data();
   if (!refData.active) {
     throw new Error('Referral code is not active');
+  }
+
+  // Check if code has been used up
+  if (refData.usesCount >= (refData.maxUses || 1)) {
+    throw new Error('Referral code has already been used');
   }
 
   // 2. Check if account already exists
@@ -108,7 +109,6 @@ export async function signupAdmin(
     email.toLowerCase(),
     password
   );
-  const uid = userCredential.user.uid;
 
   // Set display name in Firebase Auth profile
   const displayName = `${firstName.trim()} ${lastName.trim()}`.trim();
@@ -119,41 +119,28 @@ export async function signupAdmin(
     // Non-fatal - continue with signup
   }
 
-  // 4. Create/update user document in Firestore
-  await runTransaction(db, async (tx) => {
-    // Update referral code usage
-    tx.update(refDoc.ref, {
-      usesCount: increment(1),
-      updated_at: serverTimestamp(),
+  // 4. Call Cloud Function to complete signup (creates user doc, updates referral code, etc.)
+  // The Cloud Function uses Admin SDK which bypasses security rules
+  try {
+    const completeUserSignup = httpsCallable(functions, 'completeUserSignup');
+    await completeUserSignup({
+      referralCode,
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      hasPassword: true,
     });
-
-    // Create user document
-    const userRef = doc(db, 'users', uid);
-    tx.set(
-      userRef,
-      {
-        email: email.toLowerCase(),
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        displayName: displayName,
-        clubId: refData.clubId || null,
-        role: refData.intendedRole || 'club_admin',
-        referralCode: referralCode,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true }
-    );
-
-    // Add to club admin arrays
-    if (refData.clubId) {
-      const clubRef = doc(db, 'sports_clubs', refData.clubId);
-      tx.update(clubRef, {
-        clubAdminIds: arrayUnion(uid),
-        updatedAt: serverTimestamp(),
-      });
+  } catch (error: unknown) {
+    // If Cloud Function fails, delete the auth account to avoid orphaned accounts
+    try {
+      await userCredential.user.delete();
+    } catch (deleteError) {
+      console.error('Failed to cleanup auth account after signup error:', deleteError);
     }
-  });
+
+    // Re-throw with a user-friendly message
+    const err = error as { message?: string; code?: string };
+    throw new Error(err.message || 'Failed to complete signup. Please try again.');
+  }
 
   return userCredential.user;
 }
