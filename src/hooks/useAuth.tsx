@@ -24,15 +24,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
-      
+
       if (firebaseUser) {
-        // Fetch user data from Firestore
-        const data = await getCurrentUserData(firebaseUser.uid);
+        // Fetch user data from Firestore with retry logic
+        // This handles the case where Cloud Function hasn't finished creating the doc yet
+        let data = await getCurrentUserData(firebaseUser.uid);
+
+        if (!data) {
+          // Retry a few times with exponential backoff
+          const maxRetries = 5;
+          const baseDelay = 500; // Start with 500ms
+
+          for (let i = 0; i < maxRetries && !data; i++) {
+            const delay = baseDelay * Math.pow(2, i); // 500, 1000, 2000, 4000, 8000
+            await new Promise(resolve => setTimeout(resolve, delay));
+            data = await getCurrentUserData(firebaseUser.uid);
+          }
+        }
+
         setUserData(data);
       } else {
         setUserData(null);
       }
-      
+
       setLoading(false);
     });
 
