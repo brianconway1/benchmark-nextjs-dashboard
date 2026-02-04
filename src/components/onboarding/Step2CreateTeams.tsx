@@ -233,7 +233,7 @@ export default function Step2CreateTeams({
 
             <FormControl sx={{ flex: 1 }} required>
               <InputLabel>Sport Categories</InputLabel>
-              <Select
+              <Select<string[]>
                 multiple
                 value={currentTeam.sportCategories}
                 label="Sport Categories"
