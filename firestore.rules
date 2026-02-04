@@ -1,0 +1,560 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =========================================================================
+    // HELPER FUNCTIONS
+    // =========================================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function getClubData(clubId) {
+      return get(/databases/$(database)/documents/sports_clubs/$(clubId)).data;
+    }
+
+    function getTeamData(teamId) {
+      return get(/databases/$(database)/documents/teams/$(teamId)).data;
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && getUserData().get('role', '') == 'super_admin';
+    }
+
+    function isClubAdmin(clubId) {
+      let club = getClubData(clubId);
+      return isAuthenticated() && clubId != null && (
+        request.auth.uid in club.get('clubAdminIds', []) ||
+        request.auth.uid in club.get('clubAdminCoachIds', [])
+      );
+    }
+
+    function isClubAdminCoach(clubId) {
+      let club = getClubData(clubId);
+      return isAuthenticated() && clubId != null &&
+        request.auth.uid in club.get('clubAdminCoachIds', []);
+    }
+
+    function isClubMember(clubId) {
+      return isAuthenticated() && clubId != null &&
+        getUserData().get('clubId', '') == clubId;
+    }
+
+    function isClubMemberViaTeam(teamId) {
+      let team = getTeamData(teamId);
+      let teamClubId = team.get('clubId', '');
+      return isAuthenticated() &&
+        teamClubId != '' &&
+        getUserData().get('clubId', '') == teamClubId;
+    }
+
+    function isTeamCoach(teamId) {
+      let team = getTeamData(teamId);
+      return isAuthenticated() && (
+        team.get('ownerId', '') == request.auth.uid ||
+        request.auth.uid in team.get('coachIds', [])
+      );
+    }
+
+    // =========================================================================
+    // USERS COLLECTION
+    // =========================================================================
+    match /users/{userId} {
+      allow get: if isAuthenticated();
+      allow list: if isOwner(userId) ||
+                     isSuperAdmin() ||
+                     (isAuthenticated() &&
+                       resource.data.get('clubId', '') != '' &&
+                       resource.data.clubId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('clubId', ''));
+
+      allow create: if isOwner(userId) ||
+                       isSuperAdmin() ||
+                       (isAuthenticated() &&
+                         request.resource.data.get('clubId', '') != '' &&
+                         isClubAdmin(request.resource.data.get('clubId', '')));
+
+      allow update: if isOwner(userId) ||
+                       isSuperAdmin() ||
+                       isClubAdmin(resource.data.get('clubId', ''));
+
+      allow delete: if isSuperAdmin() ||
+                       isClubAdmin(resource.data.get('clubId', ''));
+
+      match /preferences/{prefId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // =========================================================================
+    // SPORTS CLUBS COLLECTION
+    // =========================================================================
+    match /sports_clubs/{clubId} {
+      allow read: if isAuthenticated() && (
+        isSuperAdmin() ||
+        isClubMember(clubId) ||
+        isClubAdmin(clubId) ||
+        request.auth.uid in resource.data.get('memberIds', [])
+      );
+
+      allow create: if isSuperAdmin() ||
+                       (isAuthenticated() && getUserData().get('role', '') in ['club_admin', 'club_admin_coach']);
+
+      allow update: if isSuperAdmin() ||
+                    isClubAdmin(clubId) ||
+                    (isAuthenticated() &&
+                     request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['clubAdminIds', 'updatedAt', 'usedCount', 'status', 'name', 'sport']) &&
+                     request.auth.uid in request.resource.data.get('clubAdminIds', []) &&
+                     !(request.auth.uid in resource.data.get('clubAdminIds', [])));
+
+      allow delete: if isSuperAdmin();
+    }
+
+    // =========================================================================
+    // TEAMS COLLECTION
+    // =========================================================================
+    match /teams/{teamId} {
+      allow read: if isAuthenticated() && (
+        isSuperAdmin() ||
+        isClubMember(resource.data.get('clubId', ''))
+      );
+
+      allow create: if isAuthenticated() && (
+        isSuperAdmin() ||
+        isClubAdmin(request.resource.data.get('clubId', '')) ||
+        isClubAdminCoach(request.resource.data.get('clubId', ''))
+      );
+
+      allow update: if isAuthenticated() && (
+        isSuperAdmin() ||
+        isTeamCoach(teamId) ||
+        isClubAdmin(resource.data.get('clubId', '')) ||
+        isClubAdminCoach(resource.data.get('clubId', ''))
+      );
+
+      allow delete: if isSuperAdmin() || isClubAdmin(resource.data.get('clubId', ''));
+
+      match /subTeams/{subTeamId} {
+        allow read: if isClubMemberViaTeam(teamId);
+        allow write: if isAuthenticated() && (
+          isSuperAdmin() ||
+          isTeamCoach(teamId) ||
+          isClubAdmin(getTeamData(teamId).get('clubId', ''))
+        );
+      }
+
+      match /matches/{matchId} {
+        allow read: if isAuthenticated() && (
+          isSuperAdmin() ||
+          isClubMemberViaTeam(teamId)
+        );
+        allow create, update, delete: if isAuthenticated() && (
+          isSuperAdmin() ||
+          isTeamCoach(teamId) ||
+          isClubAdmin(getTeamData(teamId).get('clubId', '')) ||
+          isClubAdminCoach(getTeamData(teamId).get('clubId', ''))
+        );
+      }
+    }
+
+    // =========================================================================
+    // DRILL COLLECTIONS
+    // =========================================================================
+
+    match /benchmark_drills/{drillId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin();
+    }
+
+    match /benchmark_exercises/{exerciseId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin();
+    }
+
+    match /club_drills/{drillId} {
+      allow read: if isAuthenticated() && (
+        isSuperAdmin() ||
+        isClubMember(resource.data.get('clubId', ''))
+      );
+
+      allow create: if isAuthenticated() && (
+        isSuperAdmin() ||
+        isClubMember(request.resource.data.get('clubId', ''))
+      );
+
+      allow update, delete: if isAuthenticated() && (
+        isSuperAdmin() ||
+        isOwner(resource.data.get('ownerId', '')) ||
+        isClubAdmin(resource.data.get('clubId', ''))
+      );
+    }
+
+    match /team_drills/{drillId} {
+      allow read: if isAuthenticated() && (
+        isSuperAdmin() ||
+        isClubMember(resource.data.get('clubId', '')) ||
+        isClubMemberViaTeam(resource.data.get('teamId', ''))
+      );
+
+      allow create: if isAuthenticated() && (
+        isSuperAdmin() ||
+        isTeamCoach(request.resource.data.get('teamId', '')) ||
+        isClubAdmin(request.resource.data.get('clubId', '')) ||
+        isClubMemberViaTeam(request.resource.data.get('teamId', ''))
+      );
+
+      allow update, delete: if isAuthenticated() && (
+        isSuperAdmin() ||
+        isOwner(resource.data.get('ownerId', '')) ||
+        isTeamCoach(resource.data.get('teamId', '')) ||
+        isClubAdmin(resource.data.get('clubId', ''))
+      );
+    }
+
+    match /team_exercises/{exerciseId} {
+      allow read: if isAuthenticated() && (
+        isSuperAdmin() ||
+        isClubMember(resource.data.get('clubId', '')) ||
+        isClubMemberViaTeam(resource.data.get('teamId', ''))
+      );
+
+      allow create: if isAuthenticated() && (
+        isSuperAdmin() ||
+        isTeamCoach(request.resource.data.get('teamId', '')) ||
+        isClubAdmin(request.resource.data.get('clubId', '')) ||
+        isClubMemberViaTeam(request.resource.data.get('teamId', ''))
+      );
+
+      allow update, delete: if isAuthenticated() && (
+        isSuperAdmin() ||
+        isOwner(resource.data.get('ownerId', '')) ||
+        isTeamCoach(resource.data.get('teamId', '')) ||
+        isClubAdmin(resource.data.get('clubId', ''))
+      );
+    }
+
+    match /user_drills/{drillId} {
+      allow read: if isAuthenticated() && (
+        isSuperAdmin() ||
+        resource.data.get('ownerId', '') == request.auth.uid
+      );
+
+      allow create: if isAuthenticated() &&
+        request.resource.data.ownerId == request.auth.uid;
+
+      allow update, delete: if isAuthenticated() && (
+        isSuperAdmin() ||
+        resource.data.get('ownerId', '') == request.auth.uid
+      );
+    }
+
+    match /user_exercises/{exerciseId} {
+      allow read: if isAuthenticated() && (
+        isSuperAdmin() ||
+        resource.data.get('ownerId', '') == request.auth.uid
+      );
+
+      allow create: if isAuthenticated() &&
+        request.resource.data.ownerId == request.auth.uid;
+
+      allow update, delete: if isAuthenticated() && (
+        isSuperAdmin() ||
+        resource.data.get('ownerId', '') == request.auth.uid
+      );
+    }
+
+    match /deletedDrills/{drillId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isSuperAdmin();
+    }
+
+    match /masterclasses/{masterclassId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin();
+    }
+
+    // =========================================================================
+    // SESSIONS COLLECTION
+    // =========================================================================
+    match /sessions/{sessionId} {
+      allow read: if isAuthenticated() && (
+        isSuperAdmin() ||
+        resource.data.get('teamId', null) == null ||
+        isClubMemberViaTeam(resource.data.teamId)
+      );
+
+      allow create: if isAuthenticated() && (
+        isSuperAdmin() ||
+        request.resource.data.get('teamId', null) == null ||
+        isTeamCoach(request.resource.data.teamId) ||
+        isClubMemberViaTeam(request.resource.data.teamId)
+      );
+
+      allow update: if isAuthenticated() && (
+        isSuperAdmin() ||
+        resource.data.get('createdBy', '') == request.auth.uid ||
+        isTeamCoach(resource.data.get('teamId', '')) ||
+        isClubMemberViaTeam(resource.data.get('teamId', ''))
+      );
+
+      allow delete: if isAuthenticated() && (
+        isSuperAdmin() ||
+        resource.data.get('createdBy', '') == request.auth.uid ||
+        isTeamCoach(resource.data.get('teamId', '')) ||
+        isClubMemberViaTeam(resource.data.get('teamId', ''))
+      );
+
+      match /notepad/{commentId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated();
+        allow update, delete: if isAuthenticated() && resource.data.authorId == request.auth.uid;
+      }
+
+      match /notepad_reads/{odataUserId} {
+        allow read, write: if isOwner(odataUserId);
+      }
+
+      match /presence/{odataUserId} {
+        allow read: if isAuthenticated();
+        allow write: if isOwner(odataUserId);
+      }
+    }
+
+    // =========================================================================
+    // NOTES COLLECTION
+    // =========================================================================
+    match /notes/{noteId} {
+      allow read: if isAuthenticated() && (
+        isSuperAdmin() ||
+        resource.data.get('visibility', '') == 'team' ||
+        resource.data.get('ownerId', '') == request.auth.uid ||
+        resource.data.get('authorId', '') == request.auth.uid
+      );
+
+      allow create: if isAuthenticated() &&
+        request.resource.data.authorId == request.auth.uid;
+
+      allow update: if isAuthenticated() && (
+        resource.data.authorId == request.auth.uid ||
+        isSuperAdmin()
+      );
+
+      allow delete: if isAuthenticated() && (
+        resource.data.authorId == request.auth.uid ||
+        isSuperAdmin()
+      );
+    }
+
+    match /note_reads/{readId} {
+      allow read: if isAuthenticated();
+
+      allow create: if isAuthenticated() &&
+        request.resource.data.userId == request.auth.uid;
+
+      allow update: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid;
+
+      allow delete: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid;
+    }
+
+    // =========================================================================
+    // CHAT COLLECTIONS
+    // =========================================================================
+    match /chats/{chatId} {
+      allow read: if isAuthenticated() && (
+        isSuperAdmin() ||
+        request.auth.uid in resource.data.participantIds
+      );
+
+      allow create: if isAuthenticated() &&
+        request.auth.uid in request.resource.data.participantIds;
+
+      allow update: if isAuthenticated() && (
+        isSuperAdmin() ||
+        request.auth.uid in resource.data.participantIds
+      );
+
+      allow delete: if isSuperAdmin();
+
+      match /messages/{messageId} {
+        allow read: if isAuthenticated() &&
+          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participantIds;
+
+        allow create: if isAuthenticated() &&
+          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participantIds &&
+          request.resource.data.senderId == request.auth.uid;
+
+        allow update: if isAuthenticated() && (
+          resource.data.senderId == request.auth.uid ||
+          isSuperAdmin()
+        );
+
+        allow delete: if isSuperAdmin();
+      }
+    }
+
+    match /messages/{messageId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // =========================================================================
+    // NOTIFICATIONS COLLECTION
+    // =========================================================================
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && (
+        resource.data.get('toUserId', '') == request.auth.uid ||
+        resource.data.get('userId', '') == request.auth.uid
+      );
+
+      allow create: if false;
+
+      allow update: if isAuthenticated() &&
+        resource.data.toUserId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'readAt', 'updatedAt']);
+
+      allow delete: if isAuthenticated() &&
+        resource.data.toUserId == request.auth.uid;
+    }
+
+    // =========================================================================
+    // RESOURCE COLLECTIONS
+    // =========================================================================
+    match /resources/{resourceId} {
+      allow read: if isAuthenticated() && (
+        isSuperAdmin() ||
+        resource.data.get('ownerId', '') == request.auth.uid ||
+        (resource.data.get('scope', '') == 'club' && isClubMember(resource.data.get('clubId', ''))) ||
+        (resource.data.get('scope', '') == 'team' && isClubMemberViaTeam(resource.data.get('teamId', '')))
+      );
+
+      allow create: if isAuthenticated() &&
+        request.resource.data.ownerId == request.auth.uid;
+
+      allow update, delete: if isAuthenticated() && (
+        isSuperAdmin() ||
+        isOwner(resource.data.get('ownerId', ''))
+      );
+    }
+
+    match /resource_collections/{collectionId} {
+      allow read: if isAuthenticated() && (
+        isSuperAdmin() ||
+        resource.data.get('ownerId', '') == request.auth.uid ||
+        (resource.data.get('scope', '') == 'club' && isClubMember(resource.data.get('clubId', ''))) ||
+        (resource.data.get('scope', '') == 'team' && isClubMemberViaTeam(resource.data.get('teamId', '')))
+      );
+
+      allow create: if isAuthenticated() &&
+        request.resource.data.ownerId == request.auth.uid;
+
+      allow update, delete: if isAuthenticated() && (
+        isSuperAdmin() ||
+        isOwner(resource.data.get('ownerId', ''))
+      );
+    }
+
+    match /drill_collections/{collectionId} {
+      allow read: if isAuthenticated() && (
+        isSuperAdmin() ||
+        resource.data.get('ownerId', '') == request.auth.uid ||
+        (resource.data.get('scope', '') == 'club' && isClubMember(resource.data.get('clubId', ''))) ||
+        (resource.data.get('scope', '') == 'team' && isClubMemberViaTeam(resource.data.get('teamId', '')))
+      );
+
+      allow create: if isAuthenticated() &&
+        request.resource.data.ownerId == request.auth.uid;
+
+      allow update, delete: if isAuthenticated() && (
+        isSuperAdmin() ||
+        isOwner(resource.data.get('ownerId', ''))
+      );
+    }
+
+    // =========================================================================
+    // AUDIT & SYSTEM COLLECTIONS
+    // =========================================================================
+
+    match /roleAuditLog/{logId} {
+      allow read: if isSuperAdmin() || isClubAdmin(resource.data.get('clubId', ''));
+      allow write: if false;
+    }
+
+    match /activity_log/{logId} {
+      allow read: if isSuperAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
+    }
+
+    match /account_deletions/{deletionId} {
+      allow read: if isSuperAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
+    }
+
+    match /pending_content_deletion/{deletionId} {
+      allow read: if isSuperAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
+    }
+
+    match /referral_codes/{codeId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && (
+        isSuperAdmin() ||
+        isClubAdmin(request.resource.data.get('clubId', ''))
+      );
+      allow update: if isAuthenticated() && (
+        isSuperAdmin() ||
+        isClubAdmin(resource.data.get('clubId', ''))
+      );
+      allow delete: if isSuperAdmin();
+    }
+
+    match /moderation_settings/{settingId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin() || isClubAdmin(resource.data.get('clubId', ''));
+    }
+
+    match /subscriptions/{subscriptionId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
+    match /stripe_webhook_events/{eventId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
+    match /fcmTokens/{tokenId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    match /rateLimits/{limitId} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // CATCH-ALL: DENY BY DEFAULT
+    // =========================================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

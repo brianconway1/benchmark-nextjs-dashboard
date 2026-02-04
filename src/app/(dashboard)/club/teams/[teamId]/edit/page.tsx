@@ -111,9 +111,15 @@ export default function EditTeamPage() {
         setTeam(teamData as Team);
 
         // Populate form with existing data
-        const sportCategory = teamData.sports && teamData.sports.length > 0 
-          ? teamData.sports[0] 
-          : teamData.sport || '';
+        // Handle multiple field names: sports (array), sport (string), sportCategories (array)
+        let sportCategory = '';
+        if (teamData.sports && teamData.sports.length > 0) {
+          sportCategory = teamData.sports[0];
+        } else if (teamData.sport) {
+          sportCategory = teamData.sport;
+        } else if ((teamData as any).sportCategories && (teamData as any).sportCategories.length > 0) {
+          sportCategory = (teamData as any).sportCategories[0];
+        }
 
         setFormData({
           name: teamData.name || '',

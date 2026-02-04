@@ -43,13 +43,15 @@ interface UserToCreate {
 
 interface Step3CreateUsersProps {
   clubId: string | null;
-  teams: Array<Partial<Team> & { tempId?: string; ageGroup?: string; logoUrl?: string | null }>;
+  clubName: string;
+  teams: Array<Partial<Team> & { tempId?: string; ageGroup?: string; logoUrl?: string | null; sportCategories?: string[] }>;
   onComplete: () => void;
   onBack: () => void;
 }
 
 export default function Step3CreateUsers({
   clubId,
+  clubName,
   teams,
   onComplete,
   onBack,
@@ -156,6 +158,7 @@ export default function Step3CreateUsers({
             clubId: clubId,
             ageGroup: team.ageGroup || null,
             logoUrl: team.logoUrl || null,
+            sports: team.sportCategories || team.sports || [],
             members: [],
             memberIds: [],
             memberCount: 0,
@@ -194,21 +197,25 @@ export default function Step3CreateUsers({
         const userRef = doc(collection(db, 'users'));
         const userId = userRef.id;
 
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
         await runTransaction(db, async (tx) => {
           // Create referral code
           const refRef = doc(db, 'referral_codes', referralCode);
           tx.set(refRef, {
             code: referralCode,
             clubId: clubId,
+            clubName: clubName,
             teamId: actualTeamId,
             intendedRole: user.role,
             adminEmail: user.email,
-            isMemberInvitation: true, // Flag to indicate this is a member invitation (not admin signup)
+            isMemberInvitation: true, // Flag to trigger email Cloud Function
             maxUses: 1,
             usesCount: 0,
             active: true,
             createdAt: serverTimestamp(),
             updated_at: serverTimestamp(),
+            expiresAt,
           });
 
           // Create user document (without Firebase Auth - they'll sign up later)

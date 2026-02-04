@@ -56,6 +56,7 @@ interface Step2ManageMembersProps {
 
 export default function Step2ManageMembers({
   clubId,
+  clubName,
   teamId,
   teamName,
   existingMembers: initialMembers,
@@ -178,6 +179,7 @@ export default function Step2ManageMembers({
         const referralCode = generateReferralCode();
         const userRef = doc(collection(db, 'users'));
         const userId = userRef.id;
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
         await runTransaction(db, async (tx) => {
           // Create referral code
@@ -185,6 +187,7 @@ export default function Step2ManageMembers({
           tx.set(refRef, {
             code: referralCode,
             clubId: clubId,
+            clubName: clubName,
             teamId: teamId,
             intendedRole: user.role,
             adminEmail: user.email,
@@ -194,6 +197,7 @@ export default function Step2ManageMembers({
             active: true,
             createdAt: serverTimestamp(),
             updated_at: serverTimestamp(),
+            expiresAt,
           });
 
           // Create user document
