@@ -23,7 +23,7 @@ import {
   Stack,
 } from '@mui/material';
 import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
-import { collection, doc, setDoc, updateDoc, serverTimestamp, runTransaction, getDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { isValidEmail } from '@/utils/validation';
 import { appColors } from '@/theme';
@@ -144,86 +144,37 @@ export default function Step2AddMembers({
         return result;
       };
 
-      // Create users and referral codes, collect user IDs
-      const createdUserIds: string[] = [];
-      
+      // Create referral codes only - DO NOT create user documents
+      // User documents will be created by the mobile app's Cloud Function (completeUserSignup)
+      // when the user actually signs up with their Firebase Auth UID
       for (const user of users) {
         const referralCode = generateReferralCode();
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-        // Create user document first to get the ID
-        const userRef = doc(collection(db, 'users'));
-        const userId = userRef.id;
-
-        await runTransaction(db, async (tx) => {
-          // Create referral code
-          const refRef = doc(db, 'referral_codes', referralCode);
-          tx.set(refRef, {
-            code: referralCode,
-            clubId: clubId,
-            teamId: teamId,
-            intendedRole: user.role,
-            adminEmail: user.email,
-            isMemberInvitation: true, // Flag to trigger email
-            maxUses: 1,
-            usesCount: 0,
-            active: true,
-            createdAt: serverTimestamp(),
-            updated_at: serverTimestamp(),
-          });
-
-          // Create user document (without Firebase Auth - they'll sign up later)
-          tx.set(userRef, {
-            email: user.email,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            displayName: `${user.firstName} ${user.lastName}`.trim(),
-            clubId: clubId,
-            teamId: teamId,
-            role: user.role,
-            referralCode: referralCode,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
+        // Create referral code with all info needed for signup
+        const refRef = doc(db, 'referral_codes', referralCode);
+        await setDoc(refRef, {
+          code: referralCode,
+          clubId: clubId,
+          clubName: clubName,
+          teamId: teamId,
+          intendedRole: user.role,
+          adminEmail: user.email,
+          // Store name for mobile signup to use
+          firstName: user.firstName,
+          lastName: user.lastName,
+          isMemberInvitation: true, // Flag to trigger email
+          maxUses: 1,
+          usesCount: 0,
+          active: true,
+          createdAt: serverTimestamp(),
+          updated_at: serverTimestamp(),
+          expiresAt,
         });
-        
-        // Store user ID for team members array
-        createdUserIds.push(userId);
       }
 
-      // Update team's members array with the created user IDs
-      if (createdUserIds.length > 0) {
-        const teamRef = doc(db, 'teams', teamId);
-        const teamDoc = await getDoc(teamRef);
-        
-        if (teamDoc.exists()) {
-          const teamData = teamDoc.data();
-          const existingMembers = teamData.members || [];
-          
-          // Create member objects with user info
-          const newMembers = users.map((user, index) => ({
-            userId: createdUserIds[index],
-            name: `${user.firstName} ${user.lastName}`.trim(),
-            email: user.email,
-            role: user.role || 'view_only',
-          }));
-          
-          // Merge with existing members (avoid duplicates)
-          const allMembers = [...existingMembers];
-          newMembers.forEach(newMember => {
-            if (!allMembers.find(m => m.userId === newMember.userId)) {
-              allMembers.push(newMember);
-            }
-          });
-          
-          // Update team with members array and memberCount
-          await updateDoc(teamRef, {
-            members: allMembers,
-            memberIds: allMembers.map(m => m.userId),
-            memberCount: allMembers.length,
-            updatedAt: serverTimestamp(),
-          });
-        }
-      }
+      // Note: Team members array will be updated by the Cloud Function
+      // when users actually sign up via mobile app
 
       onComplete();
     } catch (err: unknown) {

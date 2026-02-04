@@ -16,6 +16,9 @@ import {
   Select,
   MenuItem,
   Avatar,
+  Chip,
+  OutlinedInput,
+  SelectChangeEvent,
 } from '@mui/material';
 import { Add as AddIcon, Delete as DeleteIcon, CloudUpload as CloudUploadIcon } from '@mui/icons-material';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
@@ -28,7 +31,7 @@ import type { Team } from '@/types';
 interface TeamFormData {
   name: string;
   ageGroup: string;
-  sportCategory: string;
+  sportCategories: string[];
   logoUrl: string | null;
   logoFile: File | null;
 }
@@ -48,11 +51,11 @@ export default function Step2CreateTeams({
 }: Step2CreateTeamsProps) {
   const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [teams, setTeams] = useState<Array<Partial<Team> & { tempId?: string; logoFile?: File; sportCategory?: string }>>(existingTeams);
+  const [teams, setTeams] = useState<Array<Partial<Team> & { tempId?: string; logoFile?: File; sportCategories?: string[] }>>(existingTeams);
   const [currentTeam, setCurrentTeam] = useState<TeamFormData>({
     name: '',
     ageGroup: '',
-    sportCategory: '',
+    sportCategories: [],
     logoUrl: null,
     logoFile: null,
   });
@@ -108,8 +111,8 @@ export default function Step2CreateTeams({
       return;
     }
 
-    if (!currentTeam.sportCategory) {
-      setError('Sport category is required');
+    if (currentTeam.sportCategories.length === 0) {
+      setError('At least one sport category is required');
       return;
     }
 
@@ -120,7 +123,8 @@ export default function Step2CreateTeams({
         tempId,
         name: currentTeam.name.trim(),
         ageGroup: currentTeam.ageGroup,
-        sportCategory: currentTeam.sportCategory,
+        sportCategories: currentTeam.sportCategories,
+        sports: currentTeam.sportCategories, // Also set sports for Team type compatibility
         logoUrl: currentTeam.logoUrl || null,
         logoFile: currentTeam.logoFile || undefined,
         clubId: clubId || undefined,
@@ -129,7 +133,7 @@ export default function Step2CreateTeams({
     setCurrentTeam({
       name: '',
       ageGroup: '',
-      sportCategory: '',
+      sportCategories: [],
       logoUrl: null,
       logoFile: null,
     });
@@ -228,11 +232,26 @@ export default function Step2CreateTeams({
             />
 
             <FormControl sx={{ flex: 1 }} required>
-              <InputLabel>Sport Category</InputLabel>
+              <InputLabel>Sport Categories</InputLabel>
               <Select
-                value={currentTeam.sportCategory}
-                label="Sport Category"
-                onChange={(e) => setCurrentTeam((prev) => ({ ...prev, sportCategory: e.target.value }))}
+                multiple
+                value={currentTeam.sportCategories}
+                label="Sport Categories"
+                onChange={(e: SelectChangeEvent<string[]>) => {
+                  const value = e.target.value;
+                  setCurrentTeam((prev) => ({
+                    ...prev,
+                    sportCategories: typeof value === 'string' ? value.split(',') : value,
+                  }));
+                }}
+                input={<OutlinedInput label="Sport Categories" />}
+                renderValue={(selected) => (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {selected.map((value) => (
+                      <Chip key={value} label={value} size="small" />
+                    ))}
+                  </Box>
+                )}
               >
                 {SPORT_CATEGORIES.map((category) => (
                   <MenuItem key={category} value={category}>
@@ -303,7 +322,7 @@ export default function Step2CreateTeams({
             onClick={handleAddTeam}
             startIcon={<AddIcon />}
             fullWidth
-            disabled={!currentTeam.name.trim() || !currentTeam.sportCategory || !currentTeam.ageGroup}
+            disabled={!currentTeam.name.trim() || currentTeam.sportCategories.length === 0 || !currentTeam.ageGroup}
           >
             Add Team
           </Button>
@@ -336,7 +355,7 @@ export default function Step2CreateTeams({
                       {team.name}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      {team.sportCategory} · {team.ageGroup}
+                      {(team.sportCategories || team.sports || []).join(', ')} · {team.ageGroup}
                     </Typography>
                   </Box>
                 </Stack>

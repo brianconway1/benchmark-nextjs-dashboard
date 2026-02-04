@@ -16,7 +16,8 @@ import {
 import GoogleIcon from '@mui/icons-material/Google';
 import AppleIcon from '@mui/icons-material/Apple';
 import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { db, auth } from '@/lib/firebase';
 import { loginWithPassword } from '@/lib/auth';
 import { signInWithGoogle, signInWithApple } from '@/lib/oauthSignIn';
 import { useAuth } from '@/hooks/useAuth';
@@ -30,7 +31,9 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<'google' | 'apple' | null>(null);
   const [redirecting, setRedirecting] = useState(false);
 
@@ -76,6 +79,7 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
 
     if (!email || !password) {
       setError('Email and password are required');
@@ -102,6 +106,7 @@ export default function LoginPage() {
 
   const handleOAuthSignIn = async (provider: 'google' | 'apple') => {
     setError('');
+    setSuccess('');
     setOauthLoading(provider);
 
     try {
@@ -119,6 +124,35 @@ export default function LoginPage() {
     } catch (err: unknown) {
       setError(getAuthErrorMessage(err));
       setOauthLoading(null);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    setError('');
+    setSuccess('');
+
+    // Validate email is entered
+    if (!email.trim()) {
+      setError('Please enter your email address first.');
+      return;
+    }
+
+    // Validate email format
+    const emailError = getEmailValidationError(email);
+    if (emailError) {
+      setError(emailError);
+      return;
+    }
+
+    setResetLoading(true);
+
+    try {
+      await sendPasswordResetEmail(auth, email.trim().toLowerCase());
+      setSuccess('Password reset email sent. Check your email for instructions to reset your password.');
+    } catch (err: unknown) {
+      setError(getAuthErrorMessage(err));
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -146,6 +180,12 @@ export default function LoginPage() {
             </Alert>
           )}
 
+          {success && (
+            <Alert severity="success" sx={{ mb: 2 }}>
+              {success}
+            </Alert>
+          )}
+
           <Box component="form" onSubmit={handleSubmit}>
             <TextField
               fullWidth
@@ -166,12 +206,30 @@ export default function LoginPage() {
               margin="normal"
               required
             />
+            <Box sx={{ textAlign: 'right', mt: 1 }}>
+              <Button
+                variant="text"
+                size="small"
+                onClick={handleForgotPassword}
+                disabled={loading || resetLoading || oauthLoading !== null}
+                sx={{ textTransform: 'none' }}
+              >
+                {resetLoading ? (
+                  <>
+                    <CircularProgress size={16} sx={{ mr: 1 }} />
+                    Sending...
+                  </>
+                ) : (
+                  'Forgot Password?'
+                )}
+              </Button>
+            </Box>
             <Button
               type="submit"
               fullWidth
               variant="contained"
-              sx={{ mt: 3, mb: 2 }}
-              disabled={loading || oauthLoading !== null}
+              sx={{ mt: 2, mb: 2 }}
+              disabled={loading || resetLoading || oauthLoading !== null}
             >
               {loading ? (
                 <>
@@ -190,7 +248,7 @@ export default function LoginPage() {
               variant="outlined"
               startIcon={oauthLoading === 'google' ? <CircularProgress size={20} /> : <GoogleIcon />}
               onClick={() => handleOAuthSignIn('google')}
-              disabled={loading || oauthLoading !== null}
+              disabled={loading || resetLoading || oauthLoading !== null}
               sx={{ mb: 1 }}
             >
               {oauthLoading === 'google' ? 'Signing in...' : 'Sign in with Google'}
@@ -200,7 +258,7 @@ export default function LoginPage() {
               variant="outlined"
               startIcon={oauthLoading === 'apple' ? <CircularProgress size={20} /> : <AppleIcon />}
               onClick={() => handleOAuthSignIn('apple')}
-              disabled={loading || oauthLoading !== null}
+              disabled={loading || resetLoading || oauthLoading !== null}
               sx={{ 
                 mb: 2,
                 bgcolor: 'black',

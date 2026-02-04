@@ -521,7 +521,8 @@ service cloud.firestore {
         isSuperAdmin() ||
         isClubAdmin(resource.data.get('clubId', ''))
       );
-      allow delete: if isSuperAdmin();
+      allow delete: if isSuperAdmin() ||
+        isClubAdmin(resource.data.get('clubId', ''));
     }
 
     match /moderation_settings/{settingId} {
