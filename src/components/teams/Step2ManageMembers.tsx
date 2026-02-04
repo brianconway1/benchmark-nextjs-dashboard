@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -21,13 +21,16 @@ import {
   TableRow,
   IconButton,
   Stack,
+  Autocomplete,
+  Chip,
 } from '@mui/material';
-import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
-import { collection, doc, getDoc, updateDoc, serverTimestamp, runTransaction } from 'firebase/firestore';
+import { Add as AddIcon, Delete as DeleteIcon, PersonAdd as PersonAddIcon } from '@mui/icons-material';
+import { doc, setDoc, getDoc, updateDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { isValidEmail } from '@/utils/validation';
 import { appColors } from '@/theme';
 import { validateUserLimit } from '@/lib/subscriptionValidation';
+import type { User } from '@/types';
 
 interface Member {
   userId: string;
@@ -73,6 +76,43 @@ export default function Step2ManageMembers({
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // State for existing club members
+  const [availableClubMembers, setAvailableClubMembers] = useState<User[]>([]);
+  const [selectedExistingMembers, setSelectedExistingMembers] = useState<User[]>([]);
+  const [loadingClubMembers, setLoadingClubMembers] = useState(true);
+
+  // Fetch existing club members who are not already on this team
+  useEffect(() => {
+    const fetchClubMembers = async () => {
+      try {
+        setLoadingClubMembers(true);
+        const membersQuery = query(
+          collection(db, 'users'),
+          where('clubId', '==', clubId)
+        );
+        const membersSnapshot = await getDocs(membersQuery);
+        const allClubMembers = membersSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as User[];
+
+        // Filter out members already on this team
+        const existingMemberIds = new Set(initialMembers.map(m => m.userId));
+        const availableMembers = allClubMembers.filter(
+          member => !existingMemberIds.has(member.id)
+        );
+
+        setAvailableClubMembers(availableMembers);
+      } catch (err) {
+        console.error('Error fetching club members:', err);
+      } finally {
+        setLoadingClubMembers(false);
+      }
+    };
+
+    fetchClubMembers();
+  }, [clubId, initialMembers]);
 
   const handleAddNewUser = () => {
     if (!currentUser.firstName || !currentUser.lastName || !currentUser.email) {
@@ -125,6 +165,36 @@ export default function Step2ManageMembers({
     setExistingMembers((prev) => prev.filter((member) => member.userId !== userId));
   };
 
+  const handleAddExistingClubMember = (member: User | null) => {
+    if (!member) return;
+
+    // Check if already selected
+    if (selectedExistingMembers.some(m => m.id === member.id)) {
+      setError('This member has already been selected');
+      return;
+    }
+
+    // Check if already on team (current members)
+    if (existingMembers.some(m => m.userId === member.id)) {
+      setError('This user is already a member of the team');
+      return;
+    }
+
+    setSelectedExistingMembers(prev => [...prev, member]);
+    // Remove from available list
+    setAvailableClubMembers(prev => prev.filter(m => m.id !== member.id));
+    setError('');
+  };
+
+  const handleRemoveSelectedExistingMember = (memberId: string) => {
+    const removedMember = selectedExistingMembers.find(m => m.id === memberId);
+    setSelectedExistingMembers(prev => prev.filter(m => m.id !== memberId));
+    // Add back to available list
+    if (removedMember) {
+      setAvailableClubMembers(prev => [...prev, removedMember]);
+    }
+  };
+
   const handleComplete = async () => {
     setLoading(true);
     setError('');
@@ -172,72 +242,61 @@ export default function Step2ManageMembers({
         return result;
       };
 
-      // Create new users if any
-      const createdUserIds: string[] = [];
-      
+      // Create referral codes only - user documents will be created when they actually sign up
+      // This prevents ID mismatch between pre-created docs and Firebase Auth UIDs
       for (const user of usersToAdd) {
         const referralCode = generateReferralCode();
-        const userRef = doc(collection(db, 'users'));
-        const userId = userRef.id;
         const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-        await runTransaction(db, async (tx) => {
-          // Create referral code
-          const refRef = doc(db, 'referral_codes', referralCode);
-          tx.set(refRef, {
-            code: referralCode,
-            clubId: clubId,
-            clubName: clubName,
-            teamId: teamId,
-            intendedRole: user.role,
-            adminEmail: user.email,
-            isMemberInvitation: true,
-            maxUses: 1,
-            usesCount: 0,
-            active: true,
-            createdAt: serverTimestamp(),
-            updated_at: serverTimestamp(),
-            expiresAt,
-          });
-
-          // Create user document
-          tx.set(userRef, {
-            email: user.email,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            displayName: `${user.firstName} ${user.lastName}`.trim(),
-            clubId: clubId,
-            teamId: teamId,
-            role: user.role,
-            referralCode: referralCode,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
+        // Create referral code with all info needed for signup
+        const refRef = doc(db, 'referral_codes', referralCode);
+        await setDoc(refRef, {
+          code: referralCode,
+          clubId: clubId,
+          clubName: clubName,
+          teamId: teamId,
+          intendedRole: user.role,
+          adminEmail: user.email,
+          // Store name for mobile signup to use
+          firstName: user.firstName,
+          lastName: user.lastName,
+          isMemberInvitation: true,
+          maxUses: 1,
+          usesCount: 0,
+          active: true,
+          createdAt: serverTimestamp(),
+          updated_at: serverTimestamp(),
+          expiresAt,
         });
-        
-        createdUserIds.push(userId);
       }
 
-      // Build final members array
-      const finalMembers: Member[] = [...existingMembers];
-      
-      // Add new members
-      usersToAdd.forEach((user, index) => {
-        finalMembers.push({
-          userId: createdUserIds[index],
-          name: `${user.firstName} ${user.lastName}`.trim(),
-          email: user.email,
-          role: user.role || 'view_only',
-        });
-      });
+      // Convert selected existing club members to Member format
+      const existingClubMembersToAdd: Member[] = selectedExistingMembers.map(user => ({
+        userId: user.id,
+        name: user.displayName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
+        email: user.email,
+        role: user.role,
+      }));
 
-      // Update team with final members array
+      // Combine current members with newly selected existing club members
+      const allMembers = [...existingMembers, ...existingClubMembersToAdd];
+
+      // Update team with all members
       await updateDoc(teamRef, {
-        members: finalMembers,
-        memberIds: finalMembers.map(m => m.userId),
-        memberCount: finalMembers.length,
+        members: allMembers,
+        memberIds: allMembers.map(m => m.userId),
+        memberCount: allMembers.length,
         updatedAt: serverTimestamp(),
       });
+
+      // Update selected existing club members' teamId to link them to this team
+      for (const user of selectedExistingMembers) {
+        const userRef = doc(db, 'users', user.id);
+        await updateDoc(userRef, {
+          teamId: teamId,
+          updatedAt: serverTimestamp(),
+        });
+      }
 
       onComplete();
     } catch (err: unknown) {
@@ -253,7 +312,7 @@ export default function Step2ManageMembers({
         Manage Members for {teamName}
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        View, add, or remove team members. New members will receive an invitation email.
+        View, add, or remove team members. You can add existing club members or invite new people.
       </Typography>
 
       {error && (
@@ -302,10 +361,87 @@ export default function Step2ManageMembers({
         </Box>
       )}
 
+      {/* Add Existing Club Members */}
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', mb: 2 }}>
+          Add Existing Club Members
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Select from members who are already part of your club.
+        </Typography>
+        <Paper variant="outlined" sx={{ p: 2 }}>
+          <Autocomplete
+            options={availableClubMembers}
+            loading={loadingClubMembers}
+            getOptionLabel={(option) => {
+              const name = option.displayName || `${option.firstName || ''} ${option.lastName || ''}`.trim() || 'Unknown';
+              return `${name} (${option.email})`;
+            }}
+            renderOption={(props, option) => (
+              <li {...props} key={option.id}>
+                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                  <Typography variant="body1">
+                    {option.displayName || `${option.firstName || ''} ${option.lastName || ''}`.trim() || 'Unknown'}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {option.email} - {option.role}
+                  </Typography>
+                </Box>
+              </li>
+            )}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Search existing club members"
+                placeholder="Type to search..."
+                InputProps={{
+                  ...params.InputProps,
+                  endAdornment: (
+                    <>
+                      {loadingClubMembers ? <CircularProgress color="inherit" size={20} /> : null}
+                      {params.InputProps.endAdornment}
+                    </>
+                  ),
+                }}
+              />
+            )}
+            onChange={(_, value) => handleAddExistingClubMember(value)}
+            value={null}
+            disabled={loading}
+            noOptionsText={loadingClubMembers ? "Loading..." : "No available club members"}
+            sx={{ mb: 2 }}
+          />
+
+          {/* Selected existing members to add */}
+          {selectedExistingMembers.length > 0 && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                Selected Club Members ({selectedExistingMembers.length})
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                {selectedExistingMembers.map((member) => (
+                  <Chip
+                    key={member.id}
+                    label={`${member.displayName || `${member.firstName || ''} ${member.lastName || ''}`.trim() || member.email} (${member.role})`}
+                    onDelete={() => handleRemoveSelectedExistingMember(member.id)}
+                    color="primary"
+                    variant="outlined"
+                    disabled={loading}
+                  />
+                ))}
+              </Box>
+            </Box>
+          )}
+        </Paper>
+      </Box>
+
       {/* Add New Members */}
       <Box sx={{ mb: 3 }}>
         <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', mb: 2 }}>
-          Add New Members
+          Invite New Members
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Invite people who are not yet part of your club. They will receive an invitation email.
         </Typography>
         <Paper variant="outlined" sx={{ p: 2 }}>
           <Stack spacing={2}>
