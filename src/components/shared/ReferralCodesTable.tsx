@@ -20,6 +20,7 @@ import ConfirmationDialog from '@/components/shared/ConfirmationDialog';
 import GenerateReferralCodeDialog from '@/components/club/GenerateReferralCodeDialog';
 import { appColors } from '@/theme';
 import { formatDate, toDate } from '@/utils/dateHelpers';
+import { getRoleLabel } from '@/config/roles';
 
 interface ReferralCodesTableProps {
   clubId: string;
@@ -126,16 +127,10 @@ export default function ReferralCodesTable({
   // Format date helper (using utility function)
   const formatDateHelper = (timestamp: unknown) => formatDate(timestamp);
 
-  // Get role display name
+  // Get role display name - use centralized role config
   const getRoleDisplayName = (role?: string) => {
     if (!role) return 'N/A';
-    const roleMap: Record<string, string> = {
-      club_admin_coach: 'Admin Coach',
-      club_admin: 'Club Admin',
-      coach: 'Coach',
-      view_only: 'View Only',
-    };
-    return roleMap[role] || role;
+    return getRoleLabel(role);
   };
 
   // Check if code is expired

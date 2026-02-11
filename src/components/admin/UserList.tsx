@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import type { User } from '@/types';
 import { formatDate } from '@/utils/dateHelpers';
+import { getRoleLabel } from '@/config/roles';
 
 interface UserListProps {
   users: User[];
@@ -35,16 +36,7 @@ export default function UserList({ users, loading = false }: UserListProps) {
         field: 'role',
         headerName: 'Role',
         width: 150,
-        valueGetter: (value: unknown) => {
-          const roleMap: Record<string, string> = {
-            coach: 'Coach',
-            club_admin: 'Club Admin',
-            club_admin_coach: 'Admin Coach',
-            view_only: 'View Only',
-            super_admin: 'Super Admin',
-          };
-          return roleMap[value as string] || value;
-        },
+        valueGetter: (value: unknown) => getRoleLabel(value as string),
       },
       {
         field: 'clubId',

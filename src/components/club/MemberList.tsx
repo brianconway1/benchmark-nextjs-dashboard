@@ -6,6 +6,7 @@ import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import type { User } from '@/types';
 import { appColors } from '@/theme';
 import { formatDate } from '@/utils/dateHelpers';
+import { getRoleLabel } from '@/config/roles';
 
 interface MemberListProps {
   members: User[];
@@ -39,16 +40,7 @@ export default function MemberList({ members, onEdit, onRemove, loading = false 
         field: 'role',
         headerName: 'Role',
         width: 150,
-        valueGetter: (value: unknown) => {
-          const roleMap: Record<string, string> = {
-            coach: 'Coach',
-            club_admin: 'Club Admin',
-            club_admin_coach: 'Admin Coach',
-            view_only: 'View Only',
-            super_admin: 'Super Admin',
-          };
-          return roleMap[value as string] || value;
-        },
+        valueGetter: (value: unknown) => getRoleLabel(value as string),
       },
       {
         field: 'createdAt',

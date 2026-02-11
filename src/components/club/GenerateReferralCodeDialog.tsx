@@ -15,6 +15,7 @@ import {
   Alert,
   CircularProgress,
   Box,
+  Typography,
 } from '@mui/material';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -22,6 +23,7 @@ import { getEmailValidationError } from '@/utils/validation';
 import { validateUserLimit } from '@/lib/subscriptionValidation';
 import { useToast } from '@/contexts/ToastContext';
 import { appColors } from '@/theme';
+import { ROLE_CONFIG, INVITABLE_ROLES, type ClubRole } from '@/config/roles';
 
 interface GenerateReferralCodeDialogProps {
   open: boolean;
@@ -40,7 +42,7 @@ export default function GenerateReferralCodeDialog({
 }: GenerateReferralCodeDialogProps) {
   const { showSuccess, showError } = useToast();
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<'coach' | 'club_admin' | 'club_admin_coach' | 'view_only'>('club_admin_coach');
+  const [role, setRole] = useState<ClubRole>('club_admin_coach');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -150,13 +152,21 @@ export default function GenerateReferralCodeDialog({
               <Select
                 value={role}
                 label="Role"
-                onChange={(e) => setRole(e.target.value as typeof role)}
+                onChange={(e) => setRole(e.target.value as ClubRole)}
                 disabled={isSubmitting}
               >
-                <MenuItem value="club_admin">Club Admin</MenuItem>
-                <MenuItem value="club_admin_coach">Admin Coach</MenuItem>
-                <MenuItem value="coach">Coach</MenuItem>
-                <MenuItem value="view_only">View Only</MenuItem>
+                {INVITABLE_ROLES.map((roleKey) => (
+                  <MenuItem key={roleKey} value={roleKey}>
+                    <Box>
+                      <Typography variant="body1">
+                        {ROLE_CONFIG[roleKey].label}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {ROLE_CONFIG[roleKey].description}
+                      </Typography>
+                    </Box>
+                  </MenuItem>
+                ))}
               </Select>
             </FormControl>
           </Box>
