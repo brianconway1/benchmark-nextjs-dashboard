@@ -24,6 +24,8 @@ import {
   Settings as SettingsIcon,
   History as HistoryIcon,
   Warning as WarningIcon,
+  FitnessCenter as FitnessCenterIcon,
+  VideoLibrary as VideoLibraryIcon,
 } from '@mui/icons-material';
 import { appColors } from '@/theme';
 
@@ -334,6 +336,45 @@ export default function AdminDashboardPage() {
               fullWidth
             >
               System Settings
+            </Button>
+          </Stack>
+        </Paper>
+      </Box>
+
+      {/* Content Management */}
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 3 }}>
+        <Paper sx={{ p: 3 }}>
+          <Typography variant="h6" sx={{ fontWeight: 'bold', color: appColors.textPrimary, mb: 2 }}>
+            Content Management
+          </Typography>
+          <Stack spacing={2}>
+            <Button
+              variant="contained"
+              onClick={() => router.push('/admin/benchmark-drills')}
+              startIcon={<FitnessCenterIcon />}
+              sx={{
+                backgroundColor: appColors.primary,
+                color: appColors.primaryText,
+                fontWeight: 'bold',
+                '&:hover': { backgroundColor: appColors.primaryHover },
+              }}
+              fullWidth
+            >
+              Benchmark Drills
+            </Button>
+            <Button
+              variant="contained"
+              onClick={() => router.push('/admin/masterclasses')}
+              startIcon={<VideoLibraryIcon />}
+              sx={{
+                backgroundColor: appColors.primary,
+                color: appColors.primaryText,
+                fontWeight: 'bold',
+                '&:hover': { backgroundColor: appColors.primaryHover },
+              }}
+              fullWidth
+            >
+              Masterclasses
             </Button>
           </Stack>
         </Paper>
