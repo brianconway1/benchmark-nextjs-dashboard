@@ -19,7 +19,7 @@ export const ROLE_CONFIG: Record<ClubRole, RoleConfig> = {
     seatType: null,
   },
   club_admin_coach: {
-    label: 'Admin + Mobile',
+    label: 'Club Admin Coach',
     description: 'Admin portal + mobile app. Uses 1 coach seat.',
     usesSeat: true,
     seatType: 'coach',
@@ -57,5 +57,5 @@ export function getRoleDescription(role: string): string {
   return ROLE_CONFIG[role as ClubRole]?.description || '';
 }
 
-// Roles available for club member invitations
-export const INVITABLE_ROLES: ClubRole[] = ['club_admin', 'club_admin_coach', 'coach', 'view_only'];
+// Roles available for club member invitations (ordered for dropdown display)
+export const INVITABLE_ROLES: ClubRole[] = ['club_admin_coach', 'club_admin', 'coach', 'view_only'];
