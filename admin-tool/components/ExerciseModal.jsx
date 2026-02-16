@@ -439,14 +439,14 @@ export default function ExerciseModal({
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Rest (seconds)
+                      Rest (minutes)
                     </label>
                     <input
                       type="number"
                       min="0"
-                      max="600"
-                      value={formData.recommendedParameters?.parameters?.restSeconds || ''}
-                      onChange={(e) => updateParameter('restSeconds', parseInt(e.target.value) || 0)}
+                      max="10"
+                      value={formData.recommendedParameters?.parameters?.restMinutes || ''}
+                      onChange={(e) => updateParameter('restMinutes', parseInt(e.target.value) || 0)}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
                     />
                   </div>

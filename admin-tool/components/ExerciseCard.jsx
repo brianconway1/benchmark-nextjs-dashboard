@@ -36,7 +36,7 @@ export default function ExerciseCard({
       const parts = [];
       if (parameters?.sets) parts.push(`${parameters.sets} sets`);
       if (parameters?.reps) parts.push(`${parameters.reps} reps`);
-      if (parameters?.restSeconds) parts.push(`${parameters.restSeconds}s rest`);
+      if (parameters?.restMinutes) parts.push(`${parameters.restMinutes} min rest`);
       return parts.join(' x ') || null;
     }
 
