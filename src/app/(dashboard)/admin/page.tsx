@@ -26,6 +26,7 @@ import {
   Warning as WarningIcon,
   FitnessCenter as FitnessCenterIcon,
   VideoLibrary as VideoLibraryIcon,
+  SportsGymnastics as SportsGymnasticsIcon,
 } from '@mui/icons-material';
 import { appColors } from '@/theme';
 
@@ -361,6 +362,20 @@ export default function AdminDashboardPage() {
               fullWidth
             >
               Benchmark Drills
+            </Button>
+            <Button
+              variant="contained"
+              onClick={() => router.push('/admin/benchmark-exercises')}
+              startIcon={<SportsGymnasticsIcon />}
+              sx={{
+                backgroundColor: appColors.primary,
+                color: appColors.primaryText,
+                fontWeight: 'bold',
+                '&:hover': { backgroundColor: appColors.primaryHover },
+              }}
+              fullWidth
+            >
+              Benchmark Exercises
             </Button>
             <Button
               variant="contained"

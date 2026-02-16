@@ -42,6 +42,7 @@ import {
   Settings as SettingsIcon,
   FitnessCenter as FitnessCenterIcon,
   VideoLibrary as VideoLibraryIcon,
+  SportsGymnastics as SportsGymnasticsIcon,
 } from '@mui/icons-material';
 import { useAuth } from '@/hooks/useAuth';
 import type { User } from '@/types';
@@ -103,6 +104,7 @@ export default function Navigation({ userData, currentPath }: NavigationProps) {
         { label: 'Audit Log', path: '/admin/audit-log', icon: <HistoryIcon /> },
         { label: 'Bulk Drill Upload', path: '/admin/bulk-upload', icon: <UploadIcon /> },
         { label: 'Benchmark Drills', path: '/admin/benchmark-drills', icon: <FitnessCenterIcon /> },
+        { label: 'Benchmark Exercises', path: '/admin/benchmark-exercises', icon: <SportsGymnasticsIcon /> },
         { label: 'Masterclasses', path: '/admin/masterclasses', icon: <VideoLibraryIcon /> },
         // { label: 'Analytics', path: '/admin/analytics', icon: <AnalyticsIcon /> },
         // { label: 'System Settings', path: '/admin/settings', icon: <SettingsIcon /> },

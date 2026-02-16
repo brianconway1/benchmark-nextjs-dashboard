@@ -119,6 +119,32 @@ export async function uploadMasterclassVideo(file, masterclassId, onProgress = (
 }
 
 /**
+ * Upload an exercise image
+ * @param {File} file - Image file
+ * @param {string} exerciseId - Exercise document ID
+ * @param {function} onProgress - Progress callback
+ * @returns {Promise<string>} - Download URL
+ */
+export async function uploadExerciseImage(file, exerciseId, onProgress = () => {}) {
+  const ext = file.name.split('.').pop() || 'jpg';
+  const path = `benchmark_exercises/${exerciseId}/image.${ext}`;
+  return uploadFile(file, path, onProgress);
+}
+
+/**
+ * Upload an exercise video
+ * @param {File} file - Video file
+ * @param {string} exerciseId - Exercise document ID
+ * @param {function} onProgress - Progress callback
+ * @returns {Promise<string>} - Download URL
+ */
+export async function uploadExerciseVideo(file, exerciseId, onProgress = () => {}) {
+  const ext = file.name.split('.').pop() || 'mp4';
+  const path = `benchmark_exercises/${exerciseId}/video.${ext}`;
+  return uploadFile(file, path, onProgress);
+}
+
+/**
  * Delete a file from Firebase Storage
  * @param {string} url - The download URL of the file to delete
  */
