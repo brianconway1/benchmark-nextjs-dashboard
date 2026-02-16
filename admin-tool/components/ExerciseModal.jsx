@@ -469,18 +469,33 @@ export default function ExerciseModal({
               )}
 
               {currentMode === 'duration' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Duration (minutes)
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="120"
-                    value={formData.recommendedParameters?.parameters?.durationMinutes || ''}
-                    onChange={(e) => updateParameter('durationMinutes', parseInt(e.target.value) || 0)}
-                    className="w-32 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Sets
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="20"
+                      value={formData.recommendedParameters?.parameters?.sets || ''}
+                      onChange={(e) => updateParameter('sets', parseInt(e.target.value) || 0)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Duration (seconds)
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="600"
+                      value={formData.recommendedParameters?.parameters?.durationSeconds || ''}
+                      onChange={(e) => updateParameter('durationSeconds', parseInt(e.target.value) || 0)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+                    />
+                  </div>
                 </div>
               )}
 

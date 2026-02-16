@@ -44,8 +44,10 @@ export default function ExerciseCard({
     }
 
     if (parameterMode === 'duration') {
-      const mins = parameters?.durationMinutes;
-      if (mins) return `${mins} mins`;
+      const parts = [];
+      if (parameters?.sets) parts.push(`${parameters.sets} sets`);
+      if (parameters?.durationSeconds) parts.push(`${parameters.durationSeconds}s`);
+      return parts.join(' x ') || null;
     }
 
     if (parameterMode === 'timeTrial') {

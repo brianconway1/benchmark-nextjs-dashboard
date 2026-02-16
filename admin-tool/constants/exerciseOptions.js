@@ -26,7 +26,7 @@ export const DEFAULT_EXERCISE_PARAMETERS = {
     sets: 3,
     reps: 5,
     restMinutes: 2,
-    durationMinutes: 10,
+    durationSeconds: 30,
   },
 };
 
