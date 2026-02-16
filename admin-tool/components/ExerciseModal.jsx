@@ -428,14 +428,29 @@ export default function ExerciseModal({
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Reps
                     </label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={formData.recommendedParameters?.parameters?.reps || ''}
-                      onChange={(e) => updateParameter('reps', parseInt(e.target.value) || 0)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
-                    />
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        value={formData.recommendedParameters?.parameters?.reps === 'Max' ? '' : (formData.recommendedParameters?.parameters?.reps || '')}
+                        onChange={(e) => updateParameter('reps', parseInt(e.target.value) || 0)}
+                        disabled={formData.recommendedParameters?.parameters?.reps === 'Max'}
+                        placeholder={formData.recommendedParameters?.parameters?.reps === 'Max' ? 'Max' : ''}
+                        className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent disabled:bg-gray-100"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => updateParameter('reps', formData.recommendedParameters?.parameters?.reps === 'Max' ? 5 : 'Max')}
+                        className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
+                          formData.recommendedParameters?.parameters?.reps === 'Max'
+                            ? 'bg-black text-white border-black'
+                            : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
+                        }`}
+                      >
+                        Max
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">

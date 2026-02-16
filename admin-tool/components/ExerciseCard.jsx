@@ -35,7 +35,10 @@ export default function ExerciseCard({
     if (parameterMode === 'setsRepsRest') {
       const parts = [];
       if (parameters?.sets) parts.push(`${parameters.sets} sets`);
-      if (parameters?.reps) parts.push(`${parameters.reps} reps`);
+      if (parameters?.reps) {
+        const repsDisplay = parameters.reps === 'Max' ? 'Max reps' : `${parameters.reps} reps`;
+        parts.push(repsDisplay);
+      }
       if (parameters?.restMinutes) parts.push(`${parameters.restMinutes} min rest`);
       return parts.join(' x ') || null;
     }
