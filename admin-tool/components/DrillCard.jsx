@@ -4,6 +4,7 @@
 import React from 'react';
 import { Play, Edit, Trash2, Copy, Clock, Tag, Target } from 'lucide-react';
 import { getYouTubeThumbnail } from '../lib/storageService';
+import { AGE_GROUP_LABELS } from '../constants/drillOptions';
 
 export default function DrillCard({
   drill,
@@ -46,10 +47,19 @@ export default function DrillCard({
     return String(arr);
   };
 
+  // Format age groups with display labels
+  const formatAgeGroups = (arr) => {
+    if (!arr) return null;
+    if (Array.isArray(arr)) {
+      return arr.map(age => AGE_GROUP_LABELS[age] || age).join(', ');
+    }
+    return AGE_GROUP_LABELS[arr] || String(arr);
+  };
+
   const durationDisplay = getDurationDisplay();
   const sectionDisplay = formatArray(section);
   const skillFocusDisplay = formatArray(skillFocus);
-  const ageGroupsDisplay = formatArray(ageGroups);
+  const ageGroupsDisplay = formatAgeGroups(ageGroups);
 
   return (
     <div

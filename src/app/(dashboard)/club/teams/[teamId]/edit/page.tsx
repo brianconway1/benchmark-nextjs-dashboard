@@ -27,7 +27,7 @@ import { storage, db } from '@/lib/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/contexts/ToastContext';
 import Step2ManageMembers from '@/components/teams/Step2ManageMembers';
-import { AGE_GROUPS, SPORT_CATEGORIES } from '@/constants/teams';
+import { AGE_GROUPS, SPORT_CATEGORIES, AGE_GROUP_LABELS } from '@/constants/teams';
 import { appColors } from '@/theme';
 import type { Team, Club } from '@/types';
 
@@ -335,7 +335,7 @@ export default function EditTeamPage() {
               >
                 {AGE_GROUPS.map((age) => (
                   <MenuItem key={age} value={age}>
-                    {age}
+                    {AGE_GROUP_LABELS[age] || age}
                   </MenuItem>
                 ))}
               </Select>

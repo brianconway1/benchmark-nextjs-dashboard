@@ -24,7 +24,7 @@ import { Add as AddIcon, Delete as DeleteIcon, CloudUpload as CloudUploadIcon } 
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebase';
 import { useAuth } from '@/hooks/useAuth';
-import { AGE_GROUPS, SPORT_CATEGORIES } from '@/constants/teams';
+import { AGE_GROUPS, SPORT_CATEGORIES, AGE_GROUP_LABELS } from '@/constants/teams';
 import { appColors } from '@/theme';
 import type { Team } from '@/types';
 
@@ -270,7 +270,7 @@ export default function Step2CreateTeams({
               >
                 {AGE_GROUPS.map((ageGroup) => (
                   <MenuItem key={ageGroup} value={ageGroup}>
-                    {ageGroup}
+                    {AGE_GROUP_LABELS[ageGroup] || ageGroup}
                   </MenuItem>
                 ))}
               </Select>
@@ -355,7 +355,7 @@ export default function Step2CreateTeams({
                       {team.name}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      {(team.sportCategories || team.sports || []).join(', ')} · {team.ageGroup}
+                      {(team.sportCategories || team.sports || []).join(', ')} · {AGE_GROUP_LABELS[team.ageGroup || ''] || team.ageGroup}
                     </Typography>
                   </Box>
                 </Stack>

@@ -43,7 +43,19 @@ export const AGE_GROUPS = [
   'U18',
   'U20',
   'Senior',
+  'Masters',
 ];
+
+// Display labels for age groups (UI shows U6/U7, data stores U6)
+export const AGE_GROUP_LABELS = {
+  'U6': 'U6/U7',
+  'U8': 'U8/U9',
+  'U10': 'U10/U11',
+  'U12': 'U12/U13',
+  'U14': 'U14/U15',
+  'U16': 'U16/U17',
+  'U18': 'U18/U19',
+};
 
 export const SPORTS = [
   "Men's Football, Ladies' Football",

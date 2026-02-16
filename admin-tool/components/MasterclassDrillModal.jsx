@@ -9,6 +9,7 @@ import {
   SECTIONS,
   SKILL_FOCUS_OPTIONS,
   AGE_GROUPS,
+  AGE_GROUP_LABELS,
   SPORTS,
   DEFAULT_RECOMMENDED_PARAMETERS,
   getDefaultDrillData,
@@ -331,7 +332,7 @@ export default function MasterclassDrillModal({
                         : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
                     }`}
                   >
-                    {age}
+                    {AGE_GROUP_LABELS[age] || age}
                   </button>
                 ))}
               </div>

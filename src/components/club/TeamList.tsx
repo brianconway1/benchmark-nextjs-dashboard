@@ -6,6 +6,7 @@ import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import type { Team } from '@/types';
 import { appColors } from '@/theme';
 import { formatDate } from '@/utils/dateHelpers';
+import { AGE_GROUP_LABELS } from '@/constants/teams';
 
 interface TeamListProps {
   teams: Team[];
@@ -27,6 +28,10 @@ export default function TeamList({ teams, onEdit, onDelete, loading = false }: T
         field: 'ageGroup',
         headerName: 'Age Group',
         width: 120,
+        valueGetter: (value: unknown) => {
+          const ageGroup = value as string;
+          return AGE_GROUP_LABELS[ageGroup] || ageGroup || 'N/A';
+        },
       },
       {
         field: 'sport',

@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import type { Team } from '@/types';
 import { formatDate } from '@/utils/dateHelpers';
+import { AGE_GROUP_LABELS } from '@/constants/teams';
 
 interface TeamListProps {
   teams: Team[];
@@ -34,7 +35,10 @@ export default function TeamList({ teams, loading = false }: TeamListProps) {
         field: 'ageGroup',
         headerName: 'Age Group',
         width: 120,
-        valueGetter: (value: unknown) => (value as string) || 'N/A',
+        valueGetter: (value: unknown) => {
+          const ageGroup = value as string;
+          return AGE_GROUP_LABELS[ageGroup] || ageGroup || 'N/A';
+        },
       },
       {
         field: 'members',

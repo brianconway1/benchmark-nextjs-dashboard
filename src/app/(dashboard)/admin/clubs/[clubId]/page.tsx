@@ -36,6 +36,7 @@ import InviteMemberModal from '@/components/club/InviteMemberModal';
 import CreateTeamDialog from '@/components/teams/CreateTeamDialog';
 import { appColors } from '@/theme';
 import { formatDate } from '@/utils/dateHelpers';
+import { AGE_GROUP_LABELS } from '@/constants/teams';
 
 export default function ClubDetailPage() {
   const router = useRouter();
@@ -153,7 +154,10 @@ export default function ClubDetailPage() {
       field: 'ageGroup',
       headerName: 'Age Group',
       width: 120,
-      valueGetter: (value: unknown) => (value as string) || 'N/A',
+      valueGetter: (value: unknown) => {
+        const ageGroup = value as string;
+        return AGE_GROUP_LABELS[ageGroup] || ageGroup || 'N/A';
+      },
     },
     {
       field: 'memberCount',
