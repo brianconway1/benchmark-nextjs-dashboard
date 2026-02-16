@@ -24,8 +24,8 @@ export const DEFAULT_EXERCISE_PARAMETERS = {
   parameterMode: 'setsRepsRest',
   parameters: {
     sets: 3,
-    reps: 10,
-    restSeconds: 60,
+    reps: 5,
+    restSeconds: 120,
     durationMinutes: 10,
   },
 };
