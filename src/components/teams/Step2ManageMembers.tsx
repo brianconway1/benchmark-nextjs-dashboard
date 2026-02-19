@@ -25,7 +25,7 @@ import {
   Chip,
 } from '@mui/material';
 import { Add as AddIcon, Delete as DeleteIcon, PersonAdd as PersonAddIcon } from '@mui/icons-material';
-import { doc, setDoc, getDoc, updateDoc, serverTimestamp, collection, query, where, getDocs, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { isValidEmail } from '@/utils/validation';
 import { appColors } from '@/theme';
@@ -42,8 +42,6 @@ interface Member {
   name: string;
   email: string;
   role: string;
-  isPending?: boolean;
-  referralCodeId?: string;
 }
 
 interface UserToAdd {
@@ -83,56 +81,6 @@ export default function Step2ManageMembers({
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [pendingMembersToRemove, setPendingMembersToRemove] = useState<Member[]>([]);
-
-  // Fetch pending members already assigned to this team
-  useEffect(() => {
-    const fetchPendingTeamMembers = async () => {
-      try {
-        const codesQuery = query(
-          collection(db, 'referral_codes'),
-          where('teamIds', 'array-contains', teamId)
-        );
-        const codesSnapshot = await getDocs(codesQuery);
-        const now = new Date();
-        const pendingMembers: Member[] = [];
-
-        codesSnapshot.docs.forEach((docSnap) => {
-          const data = docSnap.data() as ReferralCode;
-          let expiresAt: Date | null = null;
-          if (data.expiresAt) {
-            if (typeof (data.expiresAt as { toDate?: () => Date }).toDate === 'function') {
-              expiresAt = (data.expiresAt as { toDate: () => Date }).toDate();
-            } else {
-              expiresAt = new Date(data.expiresAt as unknown as number);
-            }
-          }
-          const isExpired = expiresAt && expiresAt < now;
-          const isUsed = data.usesCount >= data.maxUses;
-
-          if (!isExpired && !isUsed && data.adminEmail) {
-            if (!initialMembers.some(m => m.email.toLowerCase() === data.adminEmail?.toLowerCase())) {
-              pendingMembers.push({
-                userId: `pending-${docSnap.id}`,
-                name: `${data.firstName || ''} ${data.lastName || ''}`.trim() || data.adminEmail,
-                email: data.adminEmail,
-                role: data.intendedRole || 'view_only',
-                isPending: true,
-                referralCodeId: docSnap.id,
-              });
-            }
-          }
-        });
-
-        if (pendingMembers.length > 0) {
-          setExistingMembers(prev => [...prev, ...pendingMembers]);
-        }
-      } catch (err) {
-        console.error('Error fetching pending team members:', err);
-      }
-    };
-    fetchPendingTeamMembers();
-  }, [teamId, initialMembers]);
 
   // State for existing club members (includes pending invitations)
   const [availableClubMembers, setAvailableClubMembers] = useState<ClubMemberOption[]>([]);
@@ -264,10 +212,6 @@ export default function Step2ManageMembers({
   };
 
   const handleRemoveExistingMember = (userId: string) => {
-    const memberToRemove = existingMembers.find(m => m.userId === userId);
-    if (memberToRemove?.isPending) {
-      setPendingMembersToRemove(prev => [...prev, memberToRemove]);
-    }
     setExistingMembers((prev) => prev.filter((member) => member.userId !== userId));
   };
 
@@ -361,7 +305,6 @@ export default function Step2ManageMembers({
           clubId: clubId,
           clubName: clubName,
           teamId: teamId,
-          teamIds: [teamId], // Array for multi-team support
           intendedRole: user.role,
           adminEmail: user.email,
           // Store name for mobile signup to use
@@ -398,31 +341,13 @@ export default function Step2ManageMembers({
         updatedAt: serverTimestamp(),
       });
 
-      // Update selected members
+      // Update selected existing members (skip pending - they must sign up first)
       for (const member of selectedExistingMembers) {
-        if (member.isPending && member.referralCodeId) {
-          // For pending members, update their referral code to add this team
-          const codeRef = doc(db, 'referral_codes', member.referralCodeId);
-          await updateDoc(codeRef, {
-            teamIds: arrayUnion(teamId),
-            updatedAt: serverTimestamp(),
-          });
-        } else {
+        if (!member.isPending) {
           // For existing users, update their teamId
           const userRef = doc(db, 'users', member.id);
           await updateDoc(userRef, {
             teamId: teamId,
-            updatedAt: serverTimestamp(),
-          });
-        }
-      }
-
-      // Remove teamId from pending members that were removed
-      for (const member of pendingMembersToRemove) {
-        if (member.referralCodeId) {
-          const codeRef = doc(db, 'referral_codes', member.referralCodeId);
-          await updateDoc(codeRef, {
-            teamIds: arrayRemove(teamId),
             updatedAt: serverTimestamp(),
           });
         }
@@ -470,14 +395,7 @@ export default function Step2ManageMembers({
               <TableBody>
                 {existingMembers.map((member) => (
                   <TableRow key={member.userId}>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        {member.name}
-                        {member.isPending && (
-                          <Chip label="Pending" size="small" color="warning" variant="outlined" />
-                        )}
-                      </Box>
-                    </TableCell>
+                    <TableCell>{member.name}</TableCell>
                     <TableCell>{member.email}</TableCell>
                     <TableCell>{member.role}</TableCell>
                     <TableCell align="right">
@@ -514,8 +432,9 @@ export default function Step2ManageMembers({
               const name = option.displayName || `${option.firstName || ''} ${option.lastName || ''}`.trim() || 'Unknown';
               return `${name} (${option.email})`;
             }}
+            getOptionDisabled={(option) => option.isPending === true}
             renderOption={(props, option) => (
-              <li {...props} key={option.id}>
+              <li {...props} key={option.id} style={{ opacity: option.isPending ? 0.6 : 1 }}>
                 <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Typography variant="body1">
@@ -526,7 +445,10 @@ export default function Step2ManageMembers({
                     )}
                   </Box>
                   <Typography variant="caption" color="text.secondary">
-                    {option.email} - {option.role}
+                    {option.isPending
+                      ? 'This user must sign up before you can add them to another team'
+                      : `${option.email} - ${option.role}`
+                    }
                   </Typography>
                 </Box>
               </li>

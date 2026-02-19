@@ -26,7 +26,7 @@ import {
   Divider,
 } from '@mui/material';
 import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
-import { doc, setDoc, serverTimestamp, collection, query, where, getDocs, updateDoc, arrayUnion } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { isValidEmail } from '@/utils/validation';
 import { appColors } from '@/theme';
@@ -266,7 +266,6 @@ export default function Step2AddMembers({
           clubId: clubId,
           clubName: clubName,
           teamId: teamId,
-          teamIds: [teamId], // Array for multi-team support
           intendedRole: user.role,
           adminEmail: user.email,
           // Store name for mobile signup to use
@@ -280,22 +279,6 @@ export default function Step2AddMembers({
           updated_at: serverTimestamp(),
           expiresAt,
         });
-      }
-
-      // Handle selected existing/pending members
-      const selectedMembers = clubMembers.filter(m => selectedMemberIds.has(m.id));
-
-      for (const member of selectedMembers) {
-        if (member.isPending && member.referralCodeId) {
-          // Update referral code to add this team
-          const codeRef = doc(db, 'referral_codes', member.referralCodeId);
-          await updateDoc(codeRef, {
-            teamIds: arrayUnion(teamId),
-            updatedAt: serverTimestamp(),
-          });
-        }
-        // Note: For existing members, the team document will be updated
-        // by the parent component after team creation
       }
 
       onComplete();
@@ -343,20 +326,25 @@ export default function Step2AddMembers({
                   alignItems: 'center',
                   p: 1,
                   borderRadius: 1,
-                  '&:hover': { backgroundColor: appColors.backgroundGrey },
+                  '&:hover': { backgroundColor: member.isPending ? 'transparent' : appColors.backgroundGrey },
+                  opacity: member.isPending ? 0.6 : 1,
                 }}
               >
                 <Checkbox
                   checked={selectedMemberIds.has(member.id)}
                   onChange={() => toggleMemberSelection(member.id)}
                   size="small"
+                  disabled={member.isPending}
                 />
                 <Box sx={{ flex: 1 }}>
                   <Typography variant="body2">
                     {member.name} ({member.email})
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    {member.role}
+                    {member.isPending
+                      ? 'This user must sign up before you can add them to another team'
+                      : member.role
+                    }
                   </Typography>
                 </Box>
                 {member.isPending && (

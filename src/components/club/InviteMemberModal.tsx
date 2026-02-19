@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -17,12 +17,13 @@ import {
   Box,
   Typography,
 } from '@mui/material';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { getEmailValidationError } from '@/utils/validation';
 import { validateUserLimit } from '@/lib/subscriptionValidation';
 import { appColors } from '@/theme';
 import { ROLE_CONFIG, INVITABLE_ROLES, type ClubRole } from '@/config/roles';
+import type { Team } from '@/types';
 
 interface InviteMemberModalProps {
   open: boolean;
@@ -41,9 +42,43 @@ export default function InviteMemberModal({
 }: InviteMemberModalProps) {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<ClubRole>('coach');
+  const [selectedTeamId, setSelectedTeamId] = useState('');
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [loadingTeams, setLoadingTeams] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+
+  // Fetch teams for this club
+  useEffect(() => {
+    const fetchTeams = async () => {
+      try {
+        setLoadingTeams(true);
+        const teamsQuery = query(
+          collection(db, 'teams'),
+          where('clubId', '==', clubId)
+        );
+        const teamsSnapshot = await getDocs(teamsQuery);
+        const fetchedTeams = teamsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Team[];
+        setTeams(fetchedTeams);
+        // Auto-select if only one team
+        if (fetchedTeams.length === 1) {
+          setSelectedTeamId(fetchedTeams[0].id);
+        }
+      } catch (err) {
+        console.error('Error fetching teams:', err);
+      } finally {
+        setLoadingTeams(false);
+      }
+    };
+
+    if (open && clubId) {
+      fetchTeams();
+    }
+  }, [open, clubId]);
 
   const generateReferralCode = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -61,6 +96,11 @@ export default function InviteMemberModal({
 
     if (!email.trim()) {
       setError('Email is required');
+      return;
+    }
+
+    if (!selectedTeamId) {
+      setError('Please select a team');
       return;
     }
 
@@ -83,6 +123,7 @@ export default function InviteMemberModal({
 
       const referralCode = generateReferralCode();
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+      const selectedTeam = teams.find(t => t.id === selectedTeamId);
 
       // Create referral code with isMemberInvitation flag
       // This will trigger the email Cloud Function
@@ -90,7 +131,8 @@ export default function InviteMemberModal({
         code: referralCode,
         clubId,
         clubName,
-        teamIds: [], // No specific team - can be added later
+        teamId: selectedTeamId,
+        teamName: selectedTeam?.name || '',
         intendedRole: role,
         adminEmail: email.trim().toLowerCase(),
         isMemberInvitation: true, // Flag to trigger email
@@ -105,6 +147,7 @@ export default function InviteMemberModal({
       setSuccess(true);
       setEmail('');
       setRole('coach');
+      setSelectedTeamId(teams.length === 1 ? teams[0].id : '');
 
       // Close modal after 2 seconds
       setTimeout(() => {
@@ -123,7 +166,8 @@ export default function InviteMemberModal({
   const handleClose = () => {
     if (isSubmitting) return;
     setEmail('');
-    setRole('view_only');
+    setRole('coach');
+    setSelectedTeamId(teams.length === 1 ? teams[0].id : '');
     setError('');
     setSuccess(false);
     onClose();
@@ -146,6 +190,11 @@ export default function InviteMemberModal({
               Invitation sent successfully! An email with a referral code has been sent to {email}.
             </Alert>
           )}
+          {!loadingTeams && teams.length === 0 && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              No teams found. Please create a team before inviting members.
+            </Alert>
+          )}
 
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: 1 }}>
             <TextField
@@ -155,7 +204,7 @@ export default function InviteMemberModal({
               onChange={(e) => setEmail(e.target.value)}
               required
               fullWidth
-              disabled={isSubmitting || success}
+              disabled={isSubmitting || success || teams.length === 0}
               placeholder="member@example.com"
             />
 
@@ -165,7 +214,7 @@ export default function InviteMemberModal({
                 value={role}
                 label="Role"
                 onChange={(e) => setRole(e.target.value as ClubRole)}
-                disabled={isSubmitting || success}
+                disabled={isSubmitting || success || teams.length === 0}
               >
                 {INVITABLE_ROLES.map((roleKey) => (
                   <MenuItem key={roleKey} value={roleKey}>
@@ -179,6 +228,29 @@ export default function InviteMemberModal({
                     </Box>
                   </MenuItem>
                 ))}
+              </Select>
+            </FormControl>
+
+            <FormControl fullWidth required>
+              <InputLabel>Team</InputLabel>
+              <Select
+                value={selectedTeamId}
+                label="Team"
+                onChange={(e) => setSelectedTeamId(e.target.value)}
+                disabled={isSubmitting || success || loadingTeams || teams.length === 0}
+              >
+                {loadingTeams ? (
+                  <MenuItem disabled>
+                    <CircularProgress size={16} sx={{ mr: 1 }} />
+                    Loading teams...
+                  </MenuItem>
+                ) : (
+                  teams.map((team) => (
+                    <MenuItem key={team.id} value={team.id}>
+                      {team.name}
+                    </MenuItem>
+                  ))
+                )}
               </Select>
             </FormControl>
 
@@ -212,7 +284,7 @@ export default function InviteMemberModal({
           <Button
             type="submit"
             variant="contained"
-            disabled={isSubmitting || success || !email.trim()}
+            disabled={isSubmitting || success || !email.trim() || !selectedTeamId || teams.length === 0}
             sx={{
               backgroundColor: appColors.primary,
               color: appColors.primaryText,
