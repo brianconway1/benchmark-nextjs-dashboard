@@ -90,6 +90,7 @@ export default function InviteMemberModal({
         code: referralCode,
         clubId,
         clubName,
+        teamIds: [], // No specific team - can be added later
         intendedRole: role,
         adminEmail: email.trim().toLowerCase(),
         isMemberInvitation: true, // Flag to trigger email

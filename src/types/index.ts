@@ -59,8 +59,11 @@ export interface ReferralCode {
   code: string;
   clubId?: string;
   teamId?: string;
+  teamIds?: string[]; // Array of team IDs for multi-team assignment
   intendedRole?: string;
   adminEmail?: string;
+  firstName?: string;
+  lastName?: string;
   maxUses: number;
   usesCount: number;
   active: boolean;

@@ -25,12 +25,17 @@ import {
   Chip,
 } from '@mui/material';
 import { Add as AddIcon, Delete as DeleteIcon, PersonAdd as PersonAddIcon } from '@mui/icons-material';
-import { doc, setDoc, getDoc, updateDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, serverTimestamp, collection, query, where, getDocs, arrayUnion } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { isValidEmail } from '@/utils/validation';
 import { appColors } from '@/theme';
 import { validateUserLimit } from '@/lib/subscriptionValidation';
-import type { User } from '@/types';
+import type { User, ReferralCode } from '@/types';
+
+interface ClubMemberOption extends User {
+  isPending?: boolean;
+  referralCodeId?: string;
+}
 
 interface Member {
   userId: string;
@@ -77,33 +82,78 @@ export default function Step2ManageMembers({
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // State for existing club members
-  const [availableClubMembers, setAvailableClubMembers] = useState<User[]>([]);
-  const [selectedExistingMembers, setSelectedExistingMembers] = useState<User[]>([]);
+  // State for existing club members (includes pending invitations)
+  const [availableClubMembers, setAvailableClubMembers] = useState<ClubMemberOption[]>([]);
+  const [selectedExistingMembers, setSelectedExistingMembers] = useState<ClubMemberOption[]>([]);
   const [loadingClubMembers, setLoadingClubMembers] = useState(true);
 
-  // Fetch existing club members who are not already on this team
+  // Fetch existing club members and pending invitations
   useEffect(() => {
     const fetchClubMembers = async () => {
       try {
         setLoadingClubMembers(true);
+        const members: ClubMemberOption[] = [];
+        const existingMemberIds = new Set(initialMembers.map(m => m.userId));
+        const existingEmails = new Set(initialMembers.map(m => m.email.toLowerCase()));
+
+        // Fetch existing users in this club
         const membersQuery = query(
           collection(db, 'users'),
           where('clubId', '==', clubId)
         );
         const membersSnapshot = await getDocs(membersQuery);
-        const allClubMembers = membersSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as User[];
+        membersSnapshot.docs.forEach((doc) => {
+          if (!existingMemberIds.has(doc.id)) {
+            members.push({
+              id: doc.id,
+              ...doc.data(),
+              isPending: false,
+            } as ClubMemberOption);
+          }
+        });
 
-        // Filter out members already on this team
-        const existingMemberIds = new Set(initialMembers.map(m => m.userId));
-        const availableMembers = allClubMembers.filter(
-          member => !existingMemberIds.has(member.id)
+        // Fetch pending referral codes for this club
+        const codesQuery = query(
+          collection(db, 'referral_codes'),
+          where('clubId', '==', clubId),
+          where('active', '==', true)
         );
+        const codesSnapshot = await getDocs(codesQuery);
+        const now = new Date();
+        codesSnapshot.docs.forEach((docSnap) => {
+          const data = docSnap.data() as ReferralCode;
+          // Handle Firestore Timestamp or Date or number
+          let expiresAt: Date | null = null;
+          if (data.expiresAt) {
+            if (typeof (data.expiresAt as { toDate?: () => Date }).toDate === 'function') {
+              expiresAt = (data.expiresAt as { toDate: () => Date }).toDate();
+            } else if (data.expiresAt instanceof Date) {
+              expiresAt = data.expiresAt;
+            } else {
+              expiresAt = new Date(data.expiresAt as unknown as number);
+            }
+          }
+          const isExpired = expiresAt && expiresAt < now;
+          const isUsed = data.usesCount >= data.maxUses;
 
-        setAvailableClubMembers(availableMembers);
+          if (!isExpired && !isUsed && data.adminEmail) {
+            // Skip if email already in team or already fetched as user
+            if (!existingEmails.has(data.adminEmail.toLowerCase()) &&
+                !members.some(m => m.email?.toLowerCase() === data.adminEmail?.toLowerCase())) {
+              members.push({
+                id: `pending-${docSnap.id}`,
+                email: data.adminEmail,
+                firstName: data.firstName,
+                lastName: data.lastName,
+                role: data.intendedRole || 'view_only',
+                isPending: true,
+                referralCodeId: docSnap.id,
+              } as ClubMemberOption);
+            }
+          }
+        });
+
+        setAvailableClubMembers(members);
       } catch (err) {
         console.error('Error fetching club members:', err);
       } finally {
@@ -165,7 +215,7 @@ export default function Step2ManageMembers({
     setExistingMembers((prev) => prev.filter((member) => member.userId !== userId));
   };
 
-  const handleAddExistingClubMember = (member: User | null) => {
+  const handleAddExistingClubMember = (member: ClubMemberOption | null) => {
     if (!member) return;
 
     // Check if already selected
@@ -255,6 +305,7 @@ export default function Step2ManageMembers({
           clubId: clubId,
           clubName: clubName,
           teamId: teamId,
+          teamIds: [teamId], // Array for multi-team support
           intendedRole: user.role,
           adminEmail: user.email,
           // Store name for mobile signup to use
@@ -270,13 +321,15 @@ export default function Step2ManageMembers({
         });
       }
 
-      // Convert selected existing club members to Member format
-      const existingClubMembersToAdd: Member[] = selectedExistingMembers.map(user => ({
-        userId: user.id,
-        name: user.displayName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
-        email: user.email,
-        role: user.role,
-      }));
+      // Convert selected existing club members to Member format (skip pending - they're not users yet)
+      const existingClubMembersToAdd: Member[] = selectedExistingMembers
+        .filter(m => !m.isPending)
+        .map(user => ({
+          userId: user.id,
+          name: user.displayName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
+          email: user.email,
+          role: user.role,
+        }));
 
       // Combine current members with newly selected existing club members
       const allMembers = [...existingMembers, ...existingClubMembersToAdd];
@@ -289,13 +342,23 @@ export default function Step2ManageMembers({
         updatedAt: serverTimestamp(),
       });
 
-      // Update selected existing club members' teamId to link them to this team
-      for (const user of selectedExistingMembers) {
-        const userRef = doc(db, 'users', user.id);
-        await updateDoc(userRef, {
-          teamId: teamId,
-          updatedAt: serverTimestamp(),
-        });
+      // Update selected members
+      for (const member of selectedExistingMembers) {
+        if (member.isPending && member.referralCodeId) {
+          // For pending members, update their referral code to add this team
+          const codeRef = doc(db, 'referral_codes', member.referralCodeId);
+          await updateDoc(codeRef, {
+            teamIds: arrayUnion(teamId),
+            updatedAt: serverTimestamp(),
+          });
+        } else {
+          // For existing users, update their teamId
+          const userRef = doc(db, 'users', member.id);
+          await updateDoc(userRef, {
+            teamId: teamId,
+            updatedAt: serverTimestamp(),
+          });
+        }
       }
 
       onComplete();
@@ -379,10 +442,15 @@ export default function Step2ManageMembers({
             }}
             renderOption={(props, option) => (
               <li {...props} key={option.id}>
-                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                  <Typography variant="body1">
-                    {option.displayName || `${option.firstName || ''} ${option.lastName || ''}`.trim() || 'Unknown'}
-                  </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="body1">
+                      {option.displayName || `${option.firstName || ''} ${option.lastName || ''}`.trim() || 'Unknown'}
+                    </Typography>
+                    {option.isPending && (
+                      <Chip label="Pending" size="small" color="warning" variant="outlined" />
+                    )}
+                  </Box>
                   <Typography variant="caption" color="text.secondary">
                     {option.email} - {option.role}
                   </Typography>
@@ -422,9 +490,9 @@ export default function Step2ManageMembers({
                 {selectedExistingMembers.map((member) => (
                   <Chip
                     key={member.id}
-                    label={`${member.displayName || `${member.firstName || ''} ${member.lastName || ''}`.trim() || member.email} (${member.role})`}
+                    label={`${member.displayName || `${member.firstName || ''} ${member.lastName || ''}`.trim() || member.email} (${member.role})${member.isPending ? ' - Pending' : ''}`}
                     onDelete={() => handleRemoveSelectedExistingMember(member.id)}
-                    color="primary"
+                    color={member.isPending ? 'warning' : 'primary'}
                     variant="outlined"
                     disabled={loading}
                   />
