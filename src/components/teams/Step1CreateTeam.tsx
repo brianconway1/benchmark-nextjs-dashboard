@@ -122,12 +122,19 @@ export default function Step1CreateTeam({ clubId, onComplete, onBack }: Step1Cre
       // Upload logo if provided
       if (formData.logoFile && user) {
         try {
+          console.log('Uploading logo:', {
+            name: formData.logoFile.name,
+            size: formData.logoFile.size,
+            type: formData.logoFile.type,
+            clubId,
+          });
           const logoRef = ref(storage, `teams/${clubId}/${Date.now()}_${formData.logoFile.name}`);
           await uploadBytes(logoRef, formData.logoFile);
           logoUrl = await getDownloadURL(logoRef);
         } catch (uploadErr) {
           console.error('Error uploading logo:', uploadErr);
-          setError('Failed to upload logo. Please try again.');
+          const errMessage = uploadErr instanceof Error ? uploadErr.message : 'Unknown error';
+          setError(`Failed to upload logo: ${errMessage}`);
           setUploading(false);
           return;
         }
