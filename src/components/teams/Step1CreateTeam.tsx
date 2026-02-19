@@ -20,6 +20,7 @@ import { storage } from '@/lib/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import { AGE_GROUPS, SPORT_CATEGORIES, AGE_GROUP_LABELS } from '@/constants/teams';
 import { appColors } from '@/theme';
+import { compressImage } from '@/utils/imageCompression';
 
 interface TeamFormData {
   name: string;
@@ -48,7 +49,7 @@ export default function Step1CreateTeam({ clubId, onComplete, onBack }: Step1Cre
   const [error, setError] = useState('');
   const [uploading, setUploading] = useState(false);
 
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -58,18 +59,28 @@ export default function Step1CreateTeam({ clubId, onComplete, onBack }: Step1Cre
       return;
     }
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      setError('Image size must be less than 5MB');
+    // Validate file size (max 10MB before compression)
+    if (file.size > 10 * 1024 * 1024) {
+      setError('Image size must be less than 10MB');
       return;
     }
 
-    setFormData((prev) => ({
-      ...prev,
-      logoFile: file,
-      logoPreview: URL.createObjectURL(file),
-    }));
-    setError('');
+    try {
+      // Compress the image for logo use (small display size)
+      const compressedFile = await compressImage(file, {
+        maxSizeMB: 0.2, // 200KB max for logos
+        maxWidthOrHeight: 512, // Logos don't need to be large
+      });
+
+      setFormData((prev) => ({
+        ...prev,
+        logoFile: compressedFile,
+        logoPreview: URL.createObjectURL(compressedFile),
+      }));
+      setError('');
+    } catch {
+      setError('Failed to process image');
+    }
   };
 
   const handleRemoveLogo = () => {
@@ -263,7 +274,7 @@ export default function Step1CreateTeam({ clubId, onComplete, onBack }: Step1Cre
                 </>
               )}
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                Max 5MB. JPG, PNG, or GIF
+                Max 10MB. JPG, PNG, or GIF
               </Typography>
             </Box>
           </Box>

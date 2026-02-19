@@ -26,6 +26,7 @@ import { storage } from '@/lib/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import { AGE_GROUPS, SPORT_CATEGORIES, AGE_GROUP_LABELS } from '@/constants/teams';
 import { appColors } from '@/theme';
+import { compressImage } from '@/utils/imageCompression';
 import type { Team } from '@/types';
 
 interface TeamFormData {
@@ -72,18 +73,28 @@ export default function Step2CreateTeams({
       return;
     }
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      setError('Image size must be less than 5MB');
+    // Validate file size (max 10MB before compression)
+    if (file.size > 10 * 1024 * 1024) {
+      setError('Image size must be less than 10MB');
       return;
     }
 
-    setCurrentTeam((prev) => ({
-      ...prev,
-      logoFile: file,
-      logoUrl: URL.createObjectURL(file), // Preview URL
-    }));
-    setError('');
+    try {
+      // Compress the image for logo use (small display size)
+      const compressedFile = await compressImage(file, {
+        maxSizeMB: 0.2, // 200KB max for logos
+        maxWidthOrHeight: 512, // Logos don't need to be large
+      });
+
+      setCurrentTeam((prev) => ({
+        ...prev,
+        logoFile: compressedFile,
+        logoUrl: URL.createObjectURL(compressedFile), // Preview URL
+      }));
+      setError('');
+    } catch {
+      setError('Failed to process image');
+    }
   };
 
   const handleRemoveLogo = () => {
