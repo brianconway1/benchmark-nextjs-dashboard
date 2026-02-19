@@ -29,7 +29,14 @@ export const compressImage = async (file: File, options?: Partial<CompressionOpt
   try {
     // Dynamic import to avoid errors if package not installed
     const imageCompression = await import('browser-image-compression');
-    const compressedFile = await imageCompression.default(file, opts);
+    const compressedBlob = await imageCompression.default(file, opts);
+
+    // Convert Blob back to File to preserve the filename
+    const compressedFile = new File([compressedBlob], file.name, {
+      type: compressedBlob.type,
+      lastModified: Date.now(),
+    });
+
     console.log(
       `Compressed: ${file.name} (${(file.size / 1024).toFixed(0)}KB → ${(compressedFile.size / 1024).toFixed(0)}KB)`
     );
