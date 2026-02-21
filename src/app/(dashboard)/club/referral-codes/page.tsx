@@ -65,7 +65,6 @@ export default function ReferralCodesPage() {
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <ReferralCodesTable
         clubId={userData.clubId}
-        clubName={club.name || 'Club'}
         showHeader={true}
         height={600}
       />

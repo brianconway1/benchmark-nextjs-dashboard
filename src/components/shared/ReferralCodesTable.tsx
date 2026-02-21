@@ -4,28 +4,25 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Box,
   Typography,
-  Button,
   CircularProgress,
   Alert,
   Chip,
   IconButton,
 } from '@mui/material';
 import { DataGrid, GridColDef, GridActionsCellItem } from '@mui/x-data-grid';
-import { ContentCopy as CopyIcon, Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
+import { ContentCopy as CopyIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { useToast } from '@/contexts/ToastContext';
 import { collection, query, where, getDocs, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { ReferralCode } from '@/types';
 import ConfirmationDialog from '@/components/shared/ConfirmationDialog';
-import GenerateReferralCodeDialog from '@/components/club/GenerateReferralCodeDialog';
 import { appColors } from '@/theme';
 import { formatDate, toDate } from '@/utils/dateHelpers';
 import { getRoleLabel } from '@/config/roles';
 
 interface ReferralCodesTableProps {
   clubId: string;
-  clubName: string;
-  /** Whether to show the header with title and generate button. Default true. */
+  /** Whether to show the header with title. Default true. */
   showHeader?: boolean;
   /** Title variant - 'page' for standalone pages (h4), 'section' for embedded sections (h6). Default 'page'. */
   titleVariant?: 'page' | 'section';
@@ -35,7 +32,6 @@ interface ReferralCodesTableProps {
 
 export default function ReferralCodesTable({
   clubId,
-  clubName,
   showHeader = true,
   titleVariant = 'page',
   height = 600,
@@ -44,7 +40,6 @@ export default function ReferralCodesTable({
   const [referralCodes, setReferralCodes] = useState<ReferralCode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [codeToDelete, setCodeToDelete] = useState<ReferralCode | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -84,7 +79,7 @@ export default function ReferralCodesTable({
   const handleCopyCode = useCallback(async (code: string) => {
     try {
       await navigator.clipboard.writeText(code);
-      showSuccess('Referral code copied to clipboard!');
+      showSuccess('Invitation code copied to clipboard!');
     } catch {
       showError('Failed to copy code to clipboard');
     }
@@ -101,13 +96,13 @@ export default function ReferralCodesTable({
     try {
       setIsDeleting(true);
       await deleteDoc(doc(db, 'referral_codes', codeToDelete.id));
-      showSuccess('Referral code deleted successfully');
+      showSuccess('Invitation code deleted successfully');
       setDeleteDialogOpen(false);
       setCodeToDelete(null);
       await loadReferralCodes();
     } catch (err) {
       console.error('Error deleting referral code:', err);
-      showError('Failed to delete referral code');
+      showError('Failed to delete invitation code');
     } finally {
       setIsDeleting(false);
     }
@@ -117,11 +112,6 @@ export default function ReferralCodesTable({
     if (isDeleting) return;
     setDeleteDialogOpen(false);
     setCodeToDelete(null);
-  };
-
-  const handleGenerateComplete = () => {
-    setGenerateDialogOpen(false);
-    loadReferralCodes();
   };
 
   // Format date helper (using utility function)
@@ -295,25 +285,12 @@ export default function ReferralCodesTable({
               gutterBottom
               sx={{ fontWeight: 'bold', color: appColors.textPrimary }}
             >
-              Referral Codes
+              Invitation Codes
             </Typography>
             <Typography variant={titleVariant === 'page' ? 'body1' : 'body2'} color="text.secondary">
-              Manage referral codes for inviting members to this club
+              Manage invitation codes for inviting members to this club
             </Typography>
           </Box>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => setGenerateDialogOpen(true)}
-            sx={{
-              backgroundColor: appColors.primary,
-              color: appColors.primaryText,
-              fontWeight: 'bold',
-              '&:hover': { backgroundColor: appColors.primaryHover },
-            }}
-          >
-            Generate Referral Code
-          </Button>
         </Box>
       )}
 
@@ -356,24 +333,15 @@ export default function ReferralCodesTable({
         />
       </Box>
 
-      {/* Generate Referral Code Dialog */}
-      <GenerateReferralCodeDialog
-        open={generateDialogOpen}
-        onClose={() => setGenerateDialogOpen(false)}
-        onComplete={handleGenerateComplete}
-        clubId={clubId}
-        clubName={clubName}
-      />
-
       {/* Delete Confirmation Dialog */}
       <ConfirmationDialog
         open={deleteDialogOpen}
         onClose={handleDeleteCancel}
         onConfirm={handleDeleteConfirm}
-        title="Delete Referral Code"
+        title="Delete Invitation Code"
         message={
           <Typography>
-            Are you sure you want to delete referral code <strong>&quot;{codeToDelete?.code}&quot;</strong>?
+            Are you sure you want to delete invitation code <strong>&quot;{codeToDelete?.code}&quot;</strong>?
             This action cannot be undone.
           </Typography>
         }

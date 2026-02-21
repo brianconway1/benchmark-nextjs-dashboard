@@ -404,7 +404,6 @@ export default function ClubDetailPage() {
     return (
       <ReferralCodesTable
         clubId={clubId}
-        clubName={club.name || 'Club'}
         showHeader={true}
         titleVariant="section"
         height={600}

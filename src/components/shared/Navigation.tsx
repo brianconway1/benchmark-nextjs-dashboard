@@ -45,6 +45,7 @@ import {
   SportsGymnastics as SportsGymnasticsIcon,
   Payment as PaymentIcon,
   OpenInNew as OpenInNewIcon,
+  HelpOutline as HelpIcon,
 } from '@mui/icons-material';
 import { useAuth } from '@/hooks/useAuth';
 import type { User } from '@/types';
@@ -119,9 +120,10 @@ export default function Navigation({ userData, currentPath }: NavigationProps) {
         { label: 'Club', path: '/club/info', icon: <BusinessIcon /> },
         { label: 'Teams', path: '/club/teams', icon: <GroupsIcon /> },
         { label: 'Members', path: '/club/members', icon: <PeopleIcon /> },
-        { label: 'Referral Codes', path: '/club/referral-codes', icon: <VpnKeyIcon /> },
+        { label: 'Invitation Codes', path: '/club/referral-codes', icon: <VpnKeyIcon /> },
         { label: 'Subscriptions', path: '/club/subscriptions', icon: <CreditCardIcon /> },
         { label: 'Billing', path: 'https://billing.stripe.com/p/login/eVq8wQ7CmaN98RyczR5EY00', icon: <PaymentIcon />, external: true },
+        { label: 'FAQ', path: '/club/faq', icon: <HelpIcon /> },
       ];
 
       // Show onboarding if club has no teams yet
