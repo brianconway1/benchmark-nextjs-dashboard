@@ -25,12 +25,21 @@ interface Subscription {
   [key: string]: unknown;
 }
 
+interface PendingInvite {
+  id: string;
+  intendedRole: string;
+  expiresAt: Date | null;
+  usesCount: number;
+  maxUses: number;
+}
+
 export default function ClubDashboardPage() {
   const { userData, loading: authLoading } = useAuth();
   const [club, setClub] = useState<Club | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [members, setMembers] = useState<User[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -86,6 +95,42 @@ export default function ClubDashboardPage() {
           ...doc.data(),
         })) as Subscription[];
         setSubscriptions(subscriptionsData);
+
+        // Load pending invites (active referral codes)
+        const codesQuery = query(
+          collection(db, 'referral_codes'),
+          where('clubId', '==', userData.clubId),
+          where('active', '==', true)
+        );
+        const codesSnapshot = await getDocs(codesQuery);
+        const pendingInvitesData: PendingInvite[] = [];
+        const now = new Date();
+        codesSnapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          let expiresAt: Date | null = null;
+          if (data.expiresAt) {
+            if (typeof data.expiresAt.toDate === 'function') {
+              expiresAt = data.expiresAt.toDate();
+            } else if (data.expiresAt instanceof Date) {
+              expiresAt = data.expiresAt;
+            } else {
+              expiresAt = new Date(data.expiresAt);
+            }
+          }
+          const isExpired = expiresAt && expiresAt < now;
+          const isUsed = (data.usesCount || 0) >= (data.maxUses || 1);
+
+          if (!isExpired && !isUsed) {
+            pendingInvitesData.push({
+              id: docSnap.id,
+              intendedRole: data.intendedRole || '',
+              expiresAt,
+              usesCount: data.usesCount || 0,
+              maxUses: data.maxUses || 1,
+            });
+          }
+        });
+        setPendingInvites(pendingInvitesData);
       } catch (err) {
         console.error('Error loading club data:', err);
         setError('Failed to load club data');
@@ -108,19 +153,27 @@ export default function ClubDashboardPage() {
   const maxCoachAccounts = club?.maxCoachAccounts || null;
   const maxViewOnlyUsers = club?.maxViewOnlyUsers || null;
 
-  // Calculate coach accounts used (coach OR club_admin_coach roles)
+  // Calculate coach accounts used (coach OR club_admin_coach roles) - includes pending invites
   const coachMembers = members.filter((m) =>
     m.role === 'coach' || m.role === 'club_admin_coach'
   ).length;
+  const pendingCoachInvites = pendingInvites.filter((p) =>
+    p.intendedRole === 'coach' || p.intendedRole === 'club_admin_coach'
+  ).length;
+  const totalCoachCommitted = coachMembers + pendingCoachInvites;
   const coachAccountsUsed = maxCoachAccounts !== null
-    ? `${coachMembers} / ${maxCoachAccounts}`
-    : coachMembers.toString();
+    ? `${totalCoachCommitted} / ${maxCoachAccounts}`
+    : totalCoachCommitted.toString();
 
-  // Calculate member slots used (view_only users)
+  // Calculate member slots used (view_only users) - includes pending invites
   const viewOnlyMembers = members.filter((m) => m.role === 'view_only').length;
+  const pendingViewOnlyInvites = pendingInvites.filter((p) =>
+    p.intendedRole === 'view_only'
+  ).length;
+  const totalViewOnlyCommitted = viewOnlyMembers + pendingViewOnlyInvites;
   const memberSlotsUsed = maxViewOnlyUsers !== null
-    ? `${viewOnlyMembers} / ${maxViewOnlyUsers}`
-    : viewOnlyMembers.toString();
+    ? `${totalViewOnlyCommitted} / ${maxViewOnlyUsers}`
+    : totalViewOnlyCommitted.toString();
 
 
   if (loading) {

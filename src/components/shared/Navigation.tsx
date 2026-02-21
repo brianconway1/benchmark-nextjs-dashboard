@@ -43,6 +43,8 @@ import {
   FitnessCenter as FitnessCenterIcon,
   VideoLibrary as VideoLibraryIcon,
   SportsGymnastics as SportsGymnasticsIcon,
+  Payment as PaymentIcon,
+  OpenInNew as OpenInNewIcon,
 } from '@mui/icons-material';
 import { useAuth } from '@/hooks/useAuth';
 import type { User } from '@/types';
@@ -119,6 +121,7 @@ export default function Navigation({ userData, currentPath }: NavigationProps) {
         { label: 'Members', path: '/club/members', icon: <PeopleIcon /> },
         { label: 'Referral Codes', path: '/club/referral-codes', icon: <VpnKeyIcon /> },
         { label: 'Subscriptions', path: '/club/subscriptions', icon: <CreditCardIcon /> },
+        { label: 'Billing', path: 'https://billing.stripe.com/p/login/eVq8wQ7CmaN98RyczR5EY00', icon: <PaymentIcon />, external: true },
       ];
 
       // Show onboarding if club has no teams yet
@@ -153,8 +156,12 @@ export default function Navigation({ userData, currentPath }: NavigationProps) {
     window.location.href = '/login';
   };
 
-  const handleNavClick = (path: string) => {
-    router.push(path);
+  const handleNavClick = (path: string, external?: boolean) => {
+    if (external) {
+      window.open(path, '_blank', 'noopener,noreferrer');
+    } else {
+      router.push(path);
+    }
     if (isMobile) {
       setMobileOpen(false);
     }
@@ -192,33 +199,38 @@ export default function Navigation({ userData, currentPath }: NavigationProps) {
       <Divider />
       <List sx={{ flexGrow: 1, pt: 2 }}>
         {navItems.map((item) => {
+          // External links are never "active"
+          const isExternal = 'external' in item && item.external;
+
           // Check if current path matches or starts with the nav item path (for nested routes)
           // For exact matches like '/club', only match exactly (not '/club/teams')
           // For paths like '/club/teams', match '/club/teams' and anything starting with '/club/teams/'
           let isActive = false;
-          if (currentPath === item.path) {
-            // Exact match
-            isActive = true;
-          } else if (currentPath.startsWith(item.path + '/')) {
-            // Check if there's a more specific nav item that should match instead
-            // For example, if we're on '/club/teams' and checking '/club', we should not match
-            // because '/club/teams' is a more specific nav item
-            const hasMoreSpecificMatch = navItems.some(
-              (otherItem) =>
-                otherItem.path !== item.path &&
-                otherItem.path.startsWith(item.path + '/') &&
-                currentPath.startsWith(otherItem.path)
-            );
-            // Only match if there's no more specific nav item that should be active
-            if (!hasMoreSpecificMatch) {
+          if (!isExternal) {
+            if (currentPath === item.path) {
+              // Exact match
               isActive = true;
+            } else if (currentPath.startsWith(item.path + '/')) {
+              // Check if there's a more specific nav item that should match instead
+              // For example, if we're on '/club/teams' and checking '/club', we should not match
+              // because '/club/teams' is a more specific nav item
+              const hasMoreSpecificMatch = navItems.some(
+                (otherItem) =>
+                  otherItem.path !== item.path &&
+                  otherItem.path.startsWith(item.path + '/') &&
+                  currentPath.startsWith(otherItem.path)
+              );
+              // Only match if there's no more specific nav item that should be active
+              if (!hasMoreSpecificMatch) {
+                isActive = true;
+              }
             }
           }
           return (
             <ListItem key={item.path} disablePadding>
               <ListItemButton
                 selected={isActive}
-                onClick={() => handleNavClick(item.path)}
+                onClick={() => handleNavClick(item.path, isExternal)}
                 sx={{
                   mx: 1,
                   borderRadius: 1,
@@ -242,6 +254,9 @@ export default function Navigation({ userData, currentPath }: NavigationProps) {
                   {item.icon}
                 </ListItemIcon>
                 <ListItemText primary={item.label} />
+                {isExternal && (
+                  <OpenInNewIcon sx={{ fontSize: 16, color: appColors.textSecondary, ml: 1 }} />
+                )}
               </ListItemButton>
             </ListItem>
           );

@@ -25,8 +25,9 @@ import {
 } from '@mui/material';
 import type { Team } from '@/types';
 import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
-import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { useAuth } from '@/hooks/useAuth';
 import { isValidEmail } from '@/utils/validation';
 import { validateUserLimit } from '@/lib/subscriptionValidation';
 import { appColors } from '@/theme';
@@ -56,6 +57,7 @@ export default function Step3CreateUsers({
   onComplete,
   onBack,
 }: Step3CreateUsersProps) {
+  const { user } = useAuth();
   const [users, setUsers] = useState<UserToCreate[]>([]);
   const [currentUser, setCurrentUser] = useState({
     teamId: '',
@@ -167,6 +169,19 @@ export default function Step3CreateUsers({
             updatedAt: serverTimestamp(),
           });
           teamIdMap[team.tempId] = teamRef.id;
+        }
+      }
+
+      // Set the admin's teamId to the first team created
+      // This ensures they have an active team when they first open the mobile app
+      if (user && teams.length > 0 && teams[0].tempId) {
+        const firstTeamId = teamIdMap[teams[0].tempId];
+        if (firstTeamId) {
+          const userRef = doc(db, 'users', user.uid);
+          await updateDoc(userRef, {
+            teamId: firstTeamId,
+            updatedAt: serverTimestamp(),
+          });
         }
       }
 
