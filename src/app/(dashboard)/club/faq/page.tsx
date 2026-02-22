@@ -67,7 +67,7 @@ Roles can be changed by a Club Admin in the admin portal.`,
   },
   {
     question: 'How do I upgrade, change, or cancel my subscription?',
-    answer: 'To upgrade or change your subscription, contact info@benchmarksports.co.uk. To cancel, log into the admin portal and go to the Billing tab in the menu.',
+    answer: 'Contact info@benchmarksports.co.uk',
   },
   {
     question: 'How do I invite team members?',
@@ -82,6 +82,10 @@ Roles can be changed by a Club Admin in the admin portal.`,
     question: 'How do new users sign up?',
     answer: 'New users receive an invitation email with a unique code. They download the app, tap Sign Up, enter the code, and create their account.',
     videoUrl: 'https://youtu.be/W06_wL-wE6s',
+  },
+  {
+    question: 'How do I report a bug/problem in the app?',
+    answer: 'Take screenshots and screen recordings of the issue, then email them with a description to info@benchmarksports.co.uk',
   },
 ];
 

@@ -122,7 +122,7 @@ export default function Navigation({ userData, currentPath }: NavigationProps) {
         { label: 'Members', path: '/club/members', icon: <PeopleIcon /> },
         { label: 'Invitation Codes', path: '/club/referral-codes', icon: <VpnKeyIcon /> },
         { label: 'Subscriptions', path: '/club/subscriptions', icon: <CreditCardIcon /> },
-        { label: 'Billing', path: 'https://billing.stripe.com/p/login/eVq8wQ7CmaN98RyczR5EY00', icon: <PaymentIcon />, external: true },
+        // { label: 'Billing', path: 'https://billing.stripe.com/p/login/eVq8wQ7CmaN98RyczR5EY00', icon: <PaymentIcon />, external: true },
         { label: 'FAQ', path: '/club/faq', icon: <HelpIcon /> },
       ];
 
@@ -202,7 +202,7 @@ export default function Navigation({ userData, currentPath }: NavigationProps) {
       <List sx={{ flexGrow: 1, pt: 2 }}>
         {navItems.map((item) => {
           // External links are never "active"
-          const isExternal = 'external' in item && item.external;
+          const isExternal = 'external' in item && (item as { external?: boolean }).external === true;
 
           // Check if current path matches or starts with the nav item path (for nested routes)
           // For exact matches like '/club', only match exactly (not '/club/teams')
