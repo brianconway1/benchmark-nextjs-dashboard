@@ -101,13 +101,6 @@ export default function EditTeamPage() {
           return;
         }
 
-        // Check if team is deleted
-        if (teamData.deletedAt) {
-          showError('Cannot edit a deleted team');
-          router.push('/club/teams');
-          return;
-        }
-
         setTeam(teamData as Team);
 
         // Populate form with existing data

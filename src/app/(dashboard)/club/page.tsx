@@ -144,7 +144,7 @@ export default function ClubDashboardPage() {
 
   // Calculate stats
   const totalMembers = members.length;
-  const activeTeams = teams.filter((team) => !team.deletedAt).length;
+  const activeTeams = teams.length;
   const activeSubscriptions = subscriptions.filter((sub) =>
     sub.status === 'active' || sub.status === 'trialing'
   ).length;

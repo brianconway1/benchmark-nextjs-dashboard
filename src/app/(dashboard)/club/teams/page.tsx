@@ -14,7 +14,7 @@ import { Add as AddIcon } from '@mui/icons-material';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/contexts/ToastContext';
 import { isSuperAdmin, isClubAdmin } from '@/lib/permissions';
-import { collection, query, where, getDocs, doc, getDoc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, updateDoc, deleteDoc, increment, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Team, Club } from '@/types';
 import TeamList from '@/components/club/TeamList';
@@ -69,9 +69,7 @@ export default function TeamsPage() {
           id: doc.id,
           ...doc.data(),
         })) as Team[];
-        // Filter out soft-deleted teams
-        const activeTeams = teamsData.filter((team) => !team.deletedAt);
-        setTeams(activeTeams);
+        setTeams(teamsData);
       } catch (err) {
         console.error('Error loading data:', err);
         setError('Failed to load data');
@@ -145,22 +143,11 @@ export default function TeamsPage() {
       }
 
       const teamData = teamDoc.data();
-      
-      // Check if already deleted
-      if (teamData.deletedAt) {
-        showError('Team is already deleted');
-        setDeleteDialogOpen(false);
-        setTeamToDelete(null);
-        return;
-      }
-
       const teamClubId = teamData.clubId;
 
-      // Soft delete: set deletedAt timestamp instead of removing document
-      await updateDoc(doc(db, 'teams', teamToDelete.id), {
-        deletedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+      // Hard delete: permanently remove team document
+      // Note: Associated drills and sessions remain orphaned in database
+      await deleteDoc(doc(db, 'teams', teamToDelete.id));
 
       // Decrement club teamCount if clubId matches
       if (teamClubId && teamClubId === club.id) {
@@ -180,8 +167,7 @@ export default function TeamsPage() {
         id: doc.id,
         ...doc.data(),
       })) as Team[];
-      const activeTeams = teamsData.filter((team) => !team.deletedAt);
-      setTeams(activeTeams);
+      setTeams(teamsData);
       
       showSuccess(`Team "${teamToDelete.name}" deleted successfully`);
       setDeleteDialogOpen(false);
@@ -266,8 +252,8 @@ export default function TeamsPage() {
         title="Delete Team"
         message={
           <Typography>
-            Are you sure you want to delete <strong>&quot;{teamToDelete?.name}&quot;</strong>? 
-            This will mark the team as deleted. The team data will be hidden but can be restored if needed.
+            Are you sure you want to delete <strong>&quot;{teamToDelete?.name}&quot;</strong>?
+            This action cannot be undone. Drills and sessions associated with this team will be preserved.
           </Typography>
         }
         confirmText="Delete"
