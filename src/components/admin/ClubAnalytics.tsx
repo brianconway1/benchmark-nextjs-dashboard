@@ -33,8 +33,10 @@ interface TeamAnalytics {
   teamId: string;
   teamName: string;
   sessionsTotal: number;
+  sessionsThisWeek: number;
   sessionsThisMonth: number;
   drillsTotal: number;
+  drillsThisWeek: number;
   drillsThisMonth: number;
   contributors: string[];
 }
@@ -56,8 +58,10 @@ interface SessionDoc {
 export default function ClubAnalytics({ clubId, teams, members }: ClubAnalyticsProps) {
   const [loading, setLoading] = useState(true);
   const [sessionsTotal, setSessionsTotal] = useState(0);
+  const [sessionsThisWeek, setSessionsThisWeek] = useState(0);
   const [sessionsThisMonth, setSessionsThisMonth] = useState(0);
   const [drillsTotal, setDrillsTotal] = useState(0);
+  const [drillsThisWeek, setDrillsThisWeek] = useState(0);
   const [drillsThisMonth, setDrillsThisMonth] = useState(0);
   const [teamAnalytics, setTeamAnalytics] = useState<TeamAnalytics[]>([]);
 
@@ -72,6 +76,11 @@ export default function ClubAnalytics({ clubId, teams, members }: ClubAnalyticsP
         setLoading(true);
         const now = new Date();
         const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        // Calculate first day of week (Monday)
+        const dayOfWeek = now.getDay();
+        const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Adjust so Monday is start of week
+        const firstDayOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diff);
+        firstDayOfWeek.setHours(0, 0, 0, 0);
 
         const teamIds = teams.map((t) => t.id);
         const memberIds = members.map((m) => m.id);
@@ -130,34 +139,49 @@ export default function ClubAnalytics({ clubId, teams, members }: ClubAnalyticsP
           }
         }
 
+        // Helper to parse date field
+        const parseDate = (dateField: DrillDoc['createdAt'] | SessionDoc['date']): Date | null => {
+          if (!dateField) return null;
+          if (typeof dateField === 'object' && 'toDate' in dateField && dateField.toDate) {
+            return dateField.toDate();
+          } else if (dateField instanceof Date) {
+            return dateField;
+          } else if (typeof dateField === 'string' || typeof dateField === 'number') {
+            return new Date(dateField);
+          }
+          return null;
+        };
+
         // Helper to check if a date is this month
         const isThisMonth = (dateField: DrillDoc['createdAt'] | SessionDoc['date']): boolean => {
-          if (!dateField) return false;
-          let date: Date;
-          if (typeof dateField === 'object' && 'toDate' in dateField && dateField.toDate) {
-            date = dateField.toDate();
-          } else if (dateField instanceof Date) {
-            date = dateField;
-          } else if (typeof dateField === 'string' || typeof dateField === 'number') {
-            date = new Date(dateField);
-          } else {
-            return false;
-          }
-          return date >= firstDayOfMonth;
+          const date = parseDate(dateField);
+          return date !== null && date >= firstDayOfMonth;
+        };
+
+        // Helper to check if a date is this week
+        const isThisWeek = (dateField: DrillDoc['createdAt'] | SessionDoc['date']): boolean => {
+          const date = parseDate(dateField);
+          return date !== null && date >= firstDayOfWeek;
         };
 
         // Calculate totals
         const totalSessions = allSessions.length;
+        const weekSessions = allSessions.filter((s) => isThisWeek(s.data.date || s.data.createdAt)).length;
         const monthSessions = allSessions.filter((s) => isThisMonth(s.data.date || s.data.createdAt)).length;
 
         const totalDrills = allTeamDrills.length + allUserDrills.length;
+        const weekDrills =
+          allTeamDrills.filter((d) => isThisWeek(d.data.createdAt)).length +
+          allUserDrills.filter((d) => isThisWeek(d.data.createdAt)).length;
         const monthDrills =
           allTeamDrills.filter((d) => isThisMonth(d.data.createdAt)).length +
           allUserDrills.filter((d) => isThisMonth(d.data.createdAt)).length;
 
         setSessionsTotal(totalSessions);
+        setSessionsThisWeek(weekSessions);
         setSessionsThisMonth(monthSessions);
         setDrillsTotal(totalDrills);
+        setDrillsThisWeek(weekDrills);
         setDrillsThisMonth(monthDrills);
 
         // Calculate per-team analytics
@@ -169,8 +193,10 @@ export default function ClubAnalytics({ clubId, teams, members }: ClubAnalyticsP
             teamId: team.id,
             teamName: team.name,
             sessionsTotal: 0,
+            sessionsThisWeek: 0,
             sessionsThisMonth: 0,
             drillsTotal: 0,
+            drillsThisWeek: 0,
             drillsThisMonth: 0,
             contributors: [],
           });
@@ -182,7 +208,11 @@ export default function ClubAnalytics({ clubId, teams, members }: ClubAnalyticsP
           const stats = teamStats.get(teamId);
           if (stats) {
             stats.sessionsTotal++;
-            if (isThisMonth(session.data.date || session.data.createdAt)) {
+            const sessionDate = session.data.date || session.data.createdAt;
+            if (isThisWeek(sessionDate)) {
+              stats.sessionsThisWeek++;
+            }
+            if (isThisMonth(sessionDate)) {
               stats.sessionsThisMonth++;
             }
             // Track contributor
@@ -200,6 +230,9 @@ export default function ClubAnalytics({ clubId, teams, members }: ClubAnalyticsP
           const stats = teamStats.get(teamId);
           if (stats) {
             stats.drillsTotal++;
+            if (isThisWeek(drill.data.createdAt)) {
+              stats.drillsThisWeek++;
+            }
             if (isThisMonth(drill.data.createdAt)) {
               stats.drillsThisMonth++;
             }
@@ -227,6 +260,9 @@ export default function ClubAnalytics({ clubId, teams, members }: ClubAnalyticsP
             const stats = teamStats.get(teamId);
             if (stats) {
               stats.drillsTotal++;
+              if (isThisWeek(drill.data.createdAt)) {
+                stats.drillsThisWeek++;
+              }
               if (isThisMonth(drill.data.createdAt)) {
                 stats.drillsThisMonth++;
               }
@@ -305,9 +341,14 @@ export default function ClubAnalytics({ clubId, teams, members }: ClubAnalyticsP
                 total
               </Typography>
             </Box>
-            <Typography variant="caption" sx={{ color: appColors.success }}>
-              +{sessionsThisMonth} this month
-            </Typography>
+            <Box sx={{ display: 'flex', gap: 1.5 }}>
+              <Typography variant="caption" sx={{ color: appColors.success }}>
+                +{sessionsThisWeek} this week
+              </Typography>
+              <Typography variant="caption" sx={{ color: appColors.success }}>
+                +{sessionsThisMonth} this month
+              </Typography>
+            </Box>
           </Box>
         </Box>
 
@@ -346,9 +387,14 @@ export default function ClubAnalytics({ clubId, teams, members }: ClubAnalyticsP
                 total
               </Typography>
             </Box>
-            <Typography variant="caption" sx={{ color: appColors.success }}>
-              +{drillsThisMonth} this month
-            </Typography>
+            <Box sx={{ display: 'flex', gap: 1.5 }}>
+              <Typography variant="caption" sx={{ color: appColors.success }}>
+                +{drillsThisWeek} this week
+              </Typography>
+              <Typography variant="caption" sx={{ color: appColors.success }}>
+                +{drillsThisMonth} this month
+              </Typography>
+            </Box>
           </Box>
         </Box>
       </Box>
@@ -378,11 +424,18 @@ export default function ClubAnalytics({ clubId, teams, members }: ClubAnalyticsP
                         <Typography variant="body2" fontWeight="bold">
                           {team.sessionsTotal}
                         </Typography>
-                        {team.sessionsThisMonth > 0 && (
-                          <Typography variant="caption" sx={{ color: appColors.success }}>
-                            +{team.sessionsThisMonth}
-                          </Typography>
-                        )}
+                        <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                          {team.sessionsThisWeek > 0 && (
+                            <Typography variant="caption" sx={{ color: appColors.success }}>
+                              +{team.sessionsThisWeek}w
+                            </Typography>
+                          )}
+                          {team.sessionsThisMonth > 0 && (
+                            <Typography variant="caption" sx={{ color: appColors.success }}>
+                              +{team.sessionsThisMonth}m
+                            </Typography>
+                          )}
+                        </Box>
                       </Box>
                     </TableCell>
                     <TableCell align="center">
@@ -390,11 +443,18 @@ export default function ClubAnalytics({ clubId, teams, members }: ClubAnalyticsP
                         <Typography variant="body2" fontWeight="bold">
                           {team.drillsTotal}
                         </Typography>
-                        {team.drillsThisMonth > 0 && (
-                          <Typography variant="caption" sx={{ color: appColors.success }}>
-                            +{team.drillsThisMonth}
-                          </Typography>
-                        )}
+                        <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                          {team.drillsThisWeek > 0 && (
+                            <Typography variant="caption" sx={{ color: appColors.success }}>
+                              +{team.drillsThisWeek}w
+                            </Typography>
+                          )}
+                          {team.drillsThisMonth > 0 && (
+                            <Typography variant="caption" sx={{ color: appColors.success }}>
+                              +{team.drillsThisMonth}m
+                            </Typography>
+                          )}
+                        </Box>
                       </Box>
                     </TableCell>
                     <TableCell>
