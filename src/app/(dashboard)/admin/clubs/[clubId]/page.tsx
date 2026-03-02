@@ -34,6 +34,7 @@ import PageLoader from '@/components/shared/PageLoader';
 import ReferralCodesTable from '@/components/shared/ReferralCodesTable';
 import InviteMemberModal from '@/components/club/InviteMemberModal';
 import CreateTeamDialog from '@/components/teams/CreateTeamDialog';
+import ClubAnalytics from '@/components/admin/ClubAnalytics';
 import { appColors } from '@/theme';
 import { formatDate } from '@/utils/dateHelpers';
 import { AGE_GROUP_LABELS } from '@/constants/teams';
@@ -321,6 +322,8 @@ export default function ClubDetailPage() {
           </Box>
         </Box>
       </Paper>
+
+      <ClubAnalytics clubId={clubId} teams={teams} members={members} />
     </Stack>
   );
 
