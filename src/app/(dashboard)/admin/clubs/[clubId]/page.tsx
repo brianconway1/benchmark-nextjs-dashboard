@@ -14,12 +14,18 @@ import {
   Tab,
   LinearProgress,
   Divider,
+  Chip,
 } from '@mui/material';
 import { useAuth } from '@/hooks/useAuth';
 import { isSuperAdmin, canAccessClub } from '@/lib/permissions';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { Club, Team, User } from '@/types';
+import type { Club, Team, User, ActivityLogEntry, FirestoreTimestamp } from '@/types';
+import {
+  getActivityStatus,
+  getActivityStatusConfig,
+  formatLastActive,
+} from '@/utils/engagementHelpers';
 import {
   ArrowBack as ArrowBackIcon,
   People as PeopleIcon,
@@ -35,6 +41,9 @@ import ReferralCodesTable from '@/components/shared/ReferralCodesTable';
 import InviteMemberModal from '@/components/club/InviteMemberModal';
 import CreateTeamDialog from '@/components/teams/CreateTeamDialog';
 import ClubAnalytics from '@/components/admin/ClubAnalytics';
+import RecentMemberLogins from '@/components/admin/RecentMemberLogins';
+import RecentActivityFeed from '@/components/admin/RecentActivityFeed';
+import MemberDetailModal from '@/components/club/MemberDetailModal';
 import { appColors } from '@/theme';
 import { formatDate } from '@/utils/dateHelpers';
 import { AGE_GROUP_LABELS } from '@/constants/teams';
@@ -53,6 +62,11 @@ export default function ClubDetailPage() {
   const [activeTab, setActiveTab] = useState(0);
   const [inviteMemberOpen, setInviteMemberOpen] = useState(false);
   const [createTeamOpen, setCreateTeamOpen] = useState(false);
+  const [recentActivities, setRecentActivities] = useState<ActivityLogEntry[]>([]);
+  const [memberActivityMap, setMemberActivityMap] = useState<Record<string, FirestoreTimestamp>>({});
+  const [activitiesLoading, setActivitiesLoading] = useState(false);
+  const [selectedMember, setSelectedMember] = useState<(User & { lastActivity?: FirestoreTimestamp }) | null>(null);
+  const [memberModalOpen, setMemberModalOpen] = useState(false);
 
   const loadClubData = useCallback(async () => {
     if (!clubId) return;
@@ -85,6 +99,39 @@ export default function ClubDetailPage() {
         ...doc.data(),
       })) as User[];
       setMembers(membersData);
+
+      // Fetch activity logs for the club
+      setActivitiesLoading(true);
+      try {
+        const activitiesQuery = query(
+          collection(db, 'activity_log'),
+          where('data.clubId', '==', clubId),
+          orderBy('timestamp', 'desc'),
+          limit(100)
+        );
+        const activitiesSnapshot = await getDocs(activitiesQuery);
+        const activitiesData = activitiesSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as ActivityLogEntry[];
+
+        // Set recent activities (first 10)
+        setRecentActivities(activitiesData.slice(0, 10));
+
+        // Build member activity map (most recent activity per member by email)
+        const activityMap: Record<string, FirestoreTimestamp> = {};
+        activitiesData.forEach((activity) => {
+          const email = activity.data?.email as string;
+          if (email && !activityMap[email]) {
+            activityMap[email] = activity.timestamp;
+          }
+        });
+        setMemberActivityMap(activityMap);
+      } catch (activityErr) {
+        console.error('Error loading activity logs:', activityErr);
+      } finally {
+        setActivitiesLoading(false);
+      }
     } catch (err) {
       console.error('Error loading club data:', err);
       setError('Failed to load club data');
@@ -174,8 +221,26 @@ export default function ClubDetailPage() {
       headerName: 'Name',
       flex: 1,
       minWidth: 200,
-      valueGetter: (value, row: User) => {
-        return row.displayName || `${row.firstName || ''} ${row.lastName || ''}`.trim() || row.email || 'N/A';
+      renderCell: (params) => {
+        const member = params.row as User;
+        const lastActivity = memberActivityMap[member.email];
+        const status = getActivityStatus(lastActivity);
+        const statusConfig = getActivityStatusConfig(status);
+        const displayName = member.displayName || `${member.firstName || ''} ${member.lastName || ''}`.trim() || member.email || 'N/A';
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box
+              sx={{
+                width: 10,
+                height: 10,
+                borderRadius: '50%',
+                backgroundColor: statusConfig.backgroundColor,
+                flexShrink: 0,
+              }}
+            />
+            <Typography variant="body2">{displayName}</Typography>
+          </Box>
+        );
       },
     },
     {
@@ -185,9 +250,46 @@ export default function ClubDetailPage() {
       minWidth: 200,
     },
     {
+      field: 'lastActive',
+      headerName: 'Last Active',
+      width: 120,
+      renderCell: (params) => {
+        const member = params.row as User;
+        const lastActivity = memberActivityMap[member.email];
+        return (
+          <Typography variant="body2" color="text.secondary">
+            {formatLastActive(lastActivity)}
+          </Typography>
+        );
+      },
+    },
+    {
+      field: 'activityStatus',
+      headerName: 'Status',
+      width: 100,
+      renderCell: (params) => {
+        const member = params.row as User;
+        const lastActivity = memberActivityMap[member.email];
+        const status = getActivityStatus(lastActivity);
+        const statusConfig = getActivityStatusConfig(status);
+        return (
+          <Chip
+            label={statusConfig.label}
+            size="small"
+            sx={{
+              backgroundColor: statusConfig.backgroundColor,
+              color: statusConfig.color,
+              fontWeight: 'medium',
+              fontSize: '0.7rem',
+            }}
+          />
+        );
+      },
+    },
+    {
       field: 'role',
       headerName: 'Role',
-      width: 150,
+      width: 120,
       valueGetter: (value: unknown) => {
         const roleMap: Record<string, string> = {
           club_admin_coach: 'Admin Coach',
@@ -197,12 +299,6 @@ export default function ClubDetailPage() {
         };
         return roleMap[value as string] || value || 'N/A';
       },
-    },
-    {
-      field: 'createdAt',
-      headerName: 'Created',
-      width: 150,
-      valueGetter: (value: unknown) => formatDate(value),
     },
   ];
 
@@ -324,6 +420,33 @@ export default function ClubDetailPage() {
       </Paper>
 
       <ClubAnalytics clubId={clubId} teams={teams} members={members} />
+
+      {/* Member Engagement Section */}
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 3 }}>
+        <Paper sx={{ p: 3 }}>
+          <Typography variant="h6" sx={{ fontWeight: 'bold', color: appColors.textPrimary, mb: 2 }}>
+            Recent Member Activity
+          </Typography>
+          <RecentMemberLogins
+            members={members.map((m) => ({
+              ...m,
+              lastActivity: memberActivityMap[m.email] || undefined,
+            }))}
+            limit={5}
+            onMemberClick={(member) => {
+              setSelectedMember(member);
+              setMemberModalOpen(true);
+            }}
+          />
+        </Paper>
+
+        <Paper sx={{ p: 3 }}>
+          <Typography variant="h6" sx={{ fontWeight: 'bold', color: appColors.textPrimary, mb: 2 }}>
+            Recent Activity Feed
+          </Typography>
+          <RecentActivityFeed activities={recentActivities} loading={activitiesLoading} />
+        </Paper>
+      </Box>
     </Stack>
   );
 
@@ -354,6 +477,15 @@ export default function ClubDetailPage() {
           loading={loading}
           getRowId={(row) => row.id}
           disableRowSelectionOnClick
+          onRowClick={(params) => {
+            const member = params.row as User;
+            setSelectedMember({
+              ...member,
+              lastActivity: memberActivityMap[member.email] || undefined,
+            });
+            setMemberModalOpen(true);
+          }}
+          sx={{ '& .MuiDataGrid-row': { cursor: 'pointer' } }}
           initialState={{
             pagination: {
               paginationModel: { pageSize: 25 },
@@ -486,6 +618,16 @@ export default function ClubDetailPage() {
         onTeamCreated={handleTeamCreated}
         clubId={clubId}
         clubName={club?.name || ''}
+      />
+
+      {/* Member Detail Modal */}
+      <MemberDetailModal
+        open={memberModalOpen}
+        onClose={() => {
+          setMemberModalOpen(false);
+          setSelectedMember(null);
+        }}
+        member={selectedMember}
       />
     </Container>
   );

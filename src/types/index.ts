@@ -72,3 +72,18 @@ export interface ReferralCode {
   expiresAt?: FirestoreTimestamp;
 }
 
+export interface ActivityLogEntry {
+  id: string;
+  type: string;
+  timestamp: FirestoreTimestamp;
+  userId?: string;
+  clubId?: string;
+  data?: {
+    userName?: string;
+    email?: string;
+    clubId?: string;
+    teamId?: string;
+    teamName?: string;
+    [key: string]: unknown;
+  };
+}
