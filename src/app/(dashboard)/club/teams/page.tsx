@@ -59,16 +59,27 @@ export default function TeamsPage() {
           return;
         }
 
-        // Load teams
-        const teamsQuery = query(
-          collection(db, 'teams'),
-          where('clubId', '==', userData.clubId)
-        );
-        const teamsSnapshot = await getDocs(teamsQuery);
+        // Load teams and users in parallel
+        const [teamsSnapshot, usersSnapshot] = await Promise.all([
+          getDocs(query(collection(db, 'teams'), where('clubId', '==', userData.clubId))),
+          getDocs(query(collection(db, 'users'), where('clubId', '==', userData.clubId))),
+        ]);
+
+        // Count users per team
+        const teamMemberCounts: Record<string, number> = {};
+        usersSnapshot.docs.forEach((doc) => {
+          const teamId = doc.data().teamId;
+          if (teamId) {
+            teamMemberCounts[teamId] = (teamMemberCounts[teamId] || 0) + 1;
+          }
+        });
+
+        // Add real member count to each team
         const teamsData = teamsSnapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
-        })) as Team[];
+          memberCount: teamMemberCounts[doc.id] || 0,
+        })) as unknown as Team[];
         setTeams(teamsData);
       } catch (err) {
         console.error('Error loading data:', err);
@@ -157,16 +168,21 @@ export default function TeamsPage() {
         });
       }
 
-      // Refresh teams list
-      const teamsQuery = query(
-        collection(db, 'teams'),
-        where('clubId', '==', club.id)
-      );
-      const teamsSnapshot = await getDocs(teamsQuery);
-      const teamsData = teamsSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Team[];
+      // Refresh teams list with member counts
+      const [refreshTeamsSnapshot, refreshUsersSnapshot] = await Promise.all([
+        getDocs(query(collection(db, 'teams'), where('clubId', '==', club.id))),
+        getDocs(query(collection(db, 'users'), where('clubId', '==', club.id))),
+      ]);
+      const refreshMemberCounts: Record<string, number> = {};
+      refreshUsersSnapshot.docs.forEach((d) => {
+        const tid = d.data().teamId;
+        if (tid) refreshMemberCounts[tid] = (refreshMemberCounts[tid] || 0) + 1;
+      });
+      const teamsData = refreshTeamsSnapshot.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+        memberCount: refreshMemberCounts[d.id] || 0,
+      })) as unknown as Team[];
       setTeams(teamsData);
       
       showSuccess(`Team "${teamToDelete.name}" deleted successfully`);

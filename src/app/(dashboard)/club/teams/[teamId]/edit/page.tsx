@@ -22,7 +22,7 @@ import {
 } from '@mui/material';
 import { CloudUpload as CloudUploadIcon } from '@mui/icons-material';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import { storage, db } from '@/lib/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/contexts/ToastContext';
@@ -30,6 +30,13 @@ import Step2ManageMembers from '@/components/teams/Step2ManageMembers';
 import { AGE_GROUPS, SPORT_CATEGORIES, AGE_GROUP_LABELS } from '@/constants/teams';
 import { appColors } from '@/theme';
 import type { Team, Club } from '@/types';
+
+interface TeamMember {
+  userId: string;
+  name: string;
+  email: string;
+  role: string;
+}
 
 const steps = ['Edit Team Details', 'Manage Members'];
 
@@ -45,6 +52,7 @@ export default function EditTeamPage() {
   const [saving, setSaving] = useState(false);
   const [club, setClub] = useState<Club | null>(null);
   const [team, setTeam] = useState<Team | null>(null);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [error, setError] = useState('');
   const [formData, setFormData] = useState({
     name: '',
@@ -81,18 +89,10 @@ export default function EditTeamPage() {
         }
 
         const teamDataRaw = teamDoc.data();
-        const teamData = { 
-          id: teamDoc.id, 
+        const teamData = {
+          id: teamDoc.id,
           ...teamDataRaw,
-          // Ensure members is an array of objects, not strings
-          members: Array.isArray(teamDataRaw.members) 
-            ? teamDataRaw.members.map((m: unknown) => 
-                typeof m === 'string' 
-                  ? { userId: m, name: '', email: '', role: 'view_only' }
-                  : (m as { userId: string; name: string; email: string; role: string })
-              )
-            : []
-        } as Team & { members: Array<{ userId: string; name: string; email: string; role: string }> };
+        } as Team;
         
         // Check if team belongs to club
         if (teamData.clubId !== userData.clubId) {
@@ -102,6 +102,25 @@ export default function EditTeamPage() {
         }
 
         setTeam(teamData as Team);
+
+        // Query users by teamId to get all team members (coaches + view_only)
+        // Must include clubId filter to satisfy Firestore security rules
+        const teamMembersQuery = query(
+          collection(db, 'users'),
+          where('clubId', '==', userData.clubId),
+          where('teamId', '==', teamId)
+        );
+        const teamMembersSnapshot = await getDocs(teamMembersQuery);
+        const teamMembersData: TeamMember[] = teamMembersSnapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
+          return {
+            userId: docSnap.id,
+            name: data.displayName || `${data.firstName || ''} ${data.lastName || ''}`.trim() || data.email,
+            email: data.email,
+            role: data.role,
+          };
+        });
+        setTeamMembers(teamMembersData);
 
         // Populate form with existing data
         // Handle multiple field names: sports (array), sport (string), sportCategories (array)
@@ -443,13 +462,7 @@ export default function EditTeamPage() {
               clubName={club.name}
               teamId={team.id}
               teamName={team.name}
-              existingMembers={((team as unknown as { members?: Array<{ userId: string; name: string; email: string; role: string } | string> }).members || []).filter((m: unknown) => {
-                if (!m) return false;
-                if (typeof m === 'object' && m !== null && 'userId' in m) {
-                  return !!(m as { userId: string }).userId;
-                }
-                return false;
-              }).map((m: unknown) => m as { userId: string; name: string; email: string; role: string })}
+              existingMembers={teamMembers}
               onComplete={handleStep2Complete}
               onBack={handleBack}
             />

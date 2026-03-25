@@ -74,17 +74,27 @@ export default function ClubDetailPage() {
       }
       setClub({ id: clubDoc.id, ...clubDoc.data() } as Club);
 
-      const teamsData = teamsSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Team[];
-      setTeams(teamsData);
-
       const membersData = membersSnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as User[];
       setMembers(membersData);
+
+      // Count users per team by teamId
+      const teamMemberCounts: Record<string, number> = {};
+      membersData.forEach((member) => {
+        if (member.teamId) {
+          teamMemberCounts[member.teamId] = (teamMemberCounts[member.teamId] || 0) + 1;
+        }
+      });
+
+      // Add real member count to each team
+      const teamsData = teamsSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        memberCount: teamMemberCounts[doc.id] || 0,
+      })) as unknown as Team[];
+      setTeams(teamsData);
     } catch (err) {
       console.error('Error loading club data:', err);
       setError('Failed to load club data');

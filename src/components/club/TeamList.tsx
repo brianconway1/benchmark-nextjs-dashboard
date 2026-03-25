@@ -49,11 +49,9 @@ export default function TeamList({ teams, onEdit, onDelete, loading = false }: T
         field: 'memberCount',
         headerName: 'Members',
         width: 100,
-        valueGetter: (value, row: Team) => {
-          if (row.members && Array.isArray(row.members)) {
-            return row.members.length;
-          }
-          return 0;
+        valueGetter: (value: unknown) => {
+          // Use memberCount field (computed from users query)
+          return (value as number) || 0;
         },
       },
       {
