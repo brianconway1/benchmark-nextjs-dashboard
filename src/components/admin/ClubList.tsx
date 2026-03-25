@@ -42,9 +42,12 @@ export default function ClubList({ clubs, loading = false }: ClubListProps) {
         field: 'memberIds',
         headerName: 'Members',
         width: 120,
-        valueGetter: (value: unknown) => {
-          if (!value || !Array.isArray(value)) return '0';
-          return value.length.toString();
+        valueGetter: (_value: unknown, row: Club) => {
+          // Calculate total members from all member arrays
+          const memberIds = Array.isArray(row.memberIds) ? row.memberIds.length : 0;
+          const clubAdminIds = Array.isArray(row.clubAdminIds) ? row.clubAdminIds.length : 0;
+          const clubAdminCoachIds = Array.isArray(row.clubAdminCoachIds) ? row.clubAdminCoachIds.length : 0;
+          return (memberIds + clubAdminIds + clubAdminCoachIds).toString();
         },
       },
       {
